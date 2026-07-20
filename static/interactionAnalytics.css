@@ -1,0 +1,56 @@
+.interaction-analytics-badges {
+	display: inline-flex;
+	gap: .35em;
+	margin-inline-start: .55em;
+	vertical-align: middle;
+	font-size: .78em;
+	white-space: nowrap;
+}
+
+.interaction-analytics-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: .2em;
+	padding: .1em .35em;
+	border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+	border-radius: .35em;
+	opacity: .82;
+}
+
+.interaction-analytics-badge[data-state="unknown"] {
+	opacity: .62;
+	font-style: italic;
+}
+
+.interaction-analytics-summary th,
+.interaction-analytics-summary td {
+	white-space: nowrap;
+}
+
+.interaction-analytics-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 1em;
+	margin-block-start: 1em;
+}
+
+.interaction-analytics-actions form {
+	display: inline-flex;
+	align-items: center;
+	gap: .65em;
+}
+
+.interaction-analytics-feed-list {
+	max-height: 18em;
+	overflow-y: auto;
+	padding: .7em 1em;
+}
+
+.interaction-analytics-feed-option {
+	display: block;
+	margin-block: .35em;
+}
+
+.interaction-analytics-feed-option input {
+	margin-inline-end: .45em;
+}

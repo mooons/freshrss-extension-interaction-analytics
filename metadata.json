@@ -1,0 +1,8 @@
+{
+	"name": "Interaction Analytics",
+	"author": "FreshRSS community",
+	"description": "Measure optional per-entry reading time and publisher-link interaction.",
+	"version": "0.1.0",
+	"entrypoint": "InteractionAnalytics",
+	"type": "user"
+}

@@ -1,0 +1,114 @@
+<?php
+declare(strict_types=1);
+/** @var InteractionAnalyticsExtension $this */
+$tracked = array_fill_keys($this->tracked_feed_ids, true);
+$escape = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$formatMilliseconds = static function (int $milliseconds): string {
+		$seconds = max(0, (int)round($milliseconds / 1000));
+		if ($seconds < 60) {
+			return $seconds . 's';
+		}
+		$minutes = intdiv($seconds, 60);
+		$seconds %= 60;
+		return $minutes . 'm ' . $seconds . 's';
+	};
+?>
+<form action="<?= _url('extension', 'configure', 'e', urlencode($this->getName())) ?>" method="post" data-auto-leave-validation="1">
+	<input type="hidden" name="_csrf" value="<?= FreshRSS_Auth::csrfToken() ?>" />
+	<div class="form-group">
+		<label class="group-name" for="interaction-tracking-enabled"><?= _t('ext.interaction_analytics.tracking_enabled') ?></label>
+		<div class="group-controls">
+			<input type="checkbox" id="interaction-tracking-enabled" name="tracking_enabled" value="1" <?= $this->tracking_enabled ? 'checked' : '' ?> />
+			<label for="interaction-tracking-enabled"><?= _t('ext.interaction_analytics.enable_tracking') ?></label>
+		</div>
+	</div>
+	<div class="form-group">
+		<label class="group-name" for="interaction-display-enabled"><?= _t('ext.interaction_analytics.display_analytics') ?></label>
+		<div class="group-controls">
+			<input type="checkbox" id="interaction-display-enabled" name="display_analytics" value="1" <?= $this->display_analytics ? 'checked' : '' ?> />
+			<label for="interaction-display-enabled"><?= _t('ext.interaction_analytics.show_badges') ?></label>
+		</div>
+	</div>
+	<div class="form-group">
+		<label class="group-name" for="interaction-preserve-metadata">
+			<?= _t('ext.interaction_analytics.preserve_metadata') ?>
+			<span class="help" title="<?= $escape(_t('ext.interaction_analytics.preserve_metadata_help')) ?>">?</span>
+		</label>
+		<div class="group-controls">
+			<input type="checkbox" id="interaction-preserve-metadata" name="preserve_historical_metadata" value="1" <?= $this->preserve_historical_metadata ? 'checked' : '' ?> />
+			<label for="interaction-preserve-metadata"><?= _t('ext.interaction_analytics.preserve_metadata_enable') ?></label>
+		</div>
+	</div>
+
+	<fieldset class="interaction-analytics-feed-list">
+		<legend><?= _t('ext.interaction_analytics.tracked_feeds') ?></legend>
+		<?php if ($this->feeds === []): ?>
+			<p><?= _t('ext.interaction_analytics.no_feeds') ?></p>
+		<?php else: foreach ($this->feeds as $feed): ?>
+			<?php $feedId = $feed->id(); ?>
+			<label class="interaction-analytics-feed-option">
+				<input type="checkbox" name="tracked_feed_ids[]" value="<?= $feedId ?>" <?= isset($tracked[$feedId]) ? 'checked' : '' ?> />
+				<span><?= $escape($feed->name()) ?></span>
+			</label>
+		<?php endforeach; endif; ?>
+	</fieldset>
+
+	<div class="form-group form-actions">
+		<div class="group-controls">
+			<button type="submit" class="btn btn-important"><?= _t('gen.action.submit') ?></button>
+			<button type="reset" class="btn"><?= _t('gen.action.cancel') ?></button>
+		</div>
+	</div>
+</form>
+
+<section class="interaction-analytics-management">
+	<h2><?= _t('ext.interaction_analytics.summary_title') ?></h2>
+	<?php if ($this->feed_summaries === []): ?>
+		<p><?= _t('ext.interaction_analytics.no_data') ?></p>
+	<?php else: ?>
+		<table class="table interaction-analytics-summary">
+			<thead><tr>
+				<th></th>
+				<th><?= _t('ext.interaction_analytics.feed') ?></th>
+				<th><?= _t('ext.interaction_analytics.entries') ?></th>
+				<th><?= _t('ext.interaction_analytics.measured') ?></th>
+				<th><?= _t('ext.interaction_analytics.total_time') ?></th>
+				<th><?= _t('ext.interaction_analytics.average_time') ?></th>
+				<th><?= _t('ext.interaction_analytics.links_opened') ?></th>
+				<th><?= _t('ext.interaction_analytics.unknown') ?></th>
+			</tr></thead>
+			<tbody>
+			<?php foreach ($this->feed_summaries as $summary): ?>
+				<tr>
+					<td><input type="checkbox" name="feed_ids[]" value="<?= (int)$summary['feed_id'] ?>" form="interaction-export-form" /></td>
+					<td><?= $escape((string)$summary['feed_name']) ?></td>
+					<td><?= (int)$summary['entries'] ?></td>
+					<td><?= (int)$summary['measured_entries'] ?></td>
+					<td><?= $escape($formatMilliseconds((int)$summary['total_time_ms'])) ?></td>
+					<td><?= $summary['average_time_ms'] === null ? '—' : $escape($formatMilliseconds((int)$summary['average_time_ms'])) ?></td>
+					<td><?= (int)$summary['links_opened'] ?></td>
+					<td><?= (int)$summary['unknown_entries'] ?></td>
+				</tr>
+			<?php endforeach; ?>
+			</tbody>
+		</table>
+	<?php endif; ?>
+
+	<div class="interaction-analytics-actions">
+		<form id="interaction-export-form" action="<?= _url('interactionAnalytics', 'export') ?>" method="get">
+			<input type="hidden" name="c" value="interactionAnalytics" />
+			<input type="hidden" name="a" value="export" />
+			<label><input type="checkbox" name="include_content" value="1" /> <?= _t('ext.interaction_analytics.include_content') ?></label>
+			<button type="submit" class="btn"><?= _t('ext.interaction_analytics.export_selected') ?></button>
+			<button type="submit" class="btn" name="all" value="1"><?= _t('ext.interaction_analytics.export_all') ?></button>
+		</form>
+		<form id="interaction-delete-form" action="<?= _url('interactionAnalytics', 'delete') ?>" method="post" onsubmit="return confirm('<?= $escape(_t('ext.interaction_analytics.confirm_delete')) ?>');">
+			<input type="hidden" name="_csrf" value="<?= FreshRSS_Auth::csrfToken() ?>" />
+			<?php foreach ($this->feed_summaries as $summary): ?>
+				<label><input type="checkbox" name="feed_ids[]" value="<?= (int)$summary['feed_id'] ?>" /> <?= $escape((string)$summary['feed_name']) ?></label>
+			<?php endforeach; ?>
+			<button type="submit" class="btn"><?= _t('ext.interaction_analytics.delete_selected') ?></button>
+			<button type="submit" class="btn btn-important" name="all" value="1"><?= _t('ext.interaction_analytics.delete_all') ?></button>
+		</form>
+	</div>
+</section>
