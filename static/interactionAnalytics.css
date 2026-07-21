@@ -1,10 +1,25 @@
 .interaction-analytics-badges {
-	display: inline-flex;
+	display: flex;
+	flex-wrap: wrap;
 	gap: .35em;
-	margin-inline-start: .55em;
-	vertical-align: middle;
+	margin-block-start: .25em;
+	margin-inline-start: 0;
 	font-size: .78em;
-	white-space: nowrap;
+	white-space: normal;
+	width: max-content;
+	max-width: 100%;
+	justify-self: start;
+}
+
+/* Normal/global rows use a grid-based title cell; occupy a complete row
+ * below the title instead of becoming an inline grid item beside it. */
+.flux .titleAuthorSummaryDate > .interaction-analytics-badges {
+	grid-column: 1 / -1;
+}
+
+/* Reader/article titles are regular block headings rather than grid cells. */
+.flux_content h1.title > .interaction-analytics-badges {
+	margin-block-start: .3em;
 }
 
 .interaction-analytics-badge {

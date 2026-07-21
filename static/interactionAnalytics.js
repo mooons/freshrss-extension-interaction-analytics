@@ -120,13 +120,15 @@
 		if (!active) {
 			return;
 		}
-		var record = ensureRecord(active.node);
+		var node = active.node;
+		var record = ensureRecord(node);
 		if (record) {
 			var elapsed = Math.max(0, Math.round(window.performance.now() - active.started_at));
 			record.total_ms += elapsed;
 			record.pending_ms += elapsed;
 			queueRecord(record);
 			scheduleFlush();
+			publishRecord(node, record);
 		}
 		active = null;
 	}
@@ -144,6 +146,9 @@
 	}
 
 	function chooseActive() {
+		if (active && visible.has(active.node)) {
+			return;
+		}
 		var current = document.querySelector('.flux.current');
 		if (isEligible(current)) {
 			switchActive(current);
@@ -165,17 +170,32 @@
 		if (!record || record.first_read_at !== null) {
 			return;
 		}
-		if (active && active.id === entryId(node)) {
-			pauseActive();
-		}
+		// FreshRSS may mark an entry read automatically after a short delay.
+		// Keep the active interval running; it ends when the entry is left or
+		// the browser becomes hidden.
+		var previewElapsed = active && active.id === entryId(node)
+			? Math.max(0, Math.round(window.performance.now() - active.started_at)) : 0;
 		record.first_read_at = Date.now();
 		if (record.link_opened === null) {
 			record.link_opened = false;
 		}
 		queueRecord(record);
 		scheduleFlush();
+		publishRecord(node, record, previewElapsed);
+	}
+
+	function publishRecord(node, record, extraTimeMs) {
+		var snapshot = {
+			feed_id: record.feed_id,
+			time_spent_ms: record.total_ms + (extraTimeMs || 0),
+			link_opened: record.link_opened,
+			first_read_at: record.first_read_at ? new Date(record.first_read_at).toISOString() : null,
+			source: record.source,
+			measurement: record.measurement
+		};
+		analytics.set(record.entry_id, snapshot);
 		if (config.display_analytics) {
-			renderBadge(node, record);
+			renderBadge(node, snapshot);
 		}
 	}
 
@@ -360,7 +380,7 @@
 			record.link_opened = true;
 			queueRecord(record);
 			scheduleFlush();
-			if (config.display_analytics) renderBadge(node, record);
+			publishRecord(node, record);
 		});
 		document.addEventListener('visibilitychange', function () {
 			if (document.hidden) {

@@ -16,7 +16,10 @@ This standalone user extension records optional reading interactions for a Fresh
 
 ## Features
 
-- Active visible time for unread entries in the FreshRSS web UI.
+- Active visible time for tracked entries in the FreshRSS web UI. Timing starts
+  while an unread entry is active and ends when the user leaves the entry or
+  switches away from the browser; automatic marking-as-read does not stop the
+  timer.
 - Publisher-link activation state.
 - Optional read-state-only records from GReader clients such as Reeder Classic
   when FreshRSS provides the `EntriesRead` hook.
