@@ -9,6 +9,7 @@
 	var analytics = new Map();
 	var records = new Map();
 	var pending = new Map();
+	var timingEntries = new Set();
 	var active = null;
 	var flushTimer = 0;
 
@@ -31,7 +32,15 @@
 	}
 
 	function isEligible(node) {
-		return !!node && node.classList.contains('flux') && node.classList.contains('not_read') && isTrackedFeed(node);
+		return !!node && timingEntries.has(entryId(node)) && isTrackedFeed(node);
+	}
+
+	function canStartTiming(node) {
+		return !!node
+			&& node.classList.contains('flux')
+			&& node.classList.contains('active')
+			&& node.classList.contains('not_read')
+			&& isTrackedFeed(node);
 	}
 
 	function ensureRecord(node, allowReadRecord) {
@@ -47,8 +56,9 @@
 			records.set(id, {
 				entry_id: id,
 				feed_id: feedId(node),
-				total_ms: stored.time_spent_ms === null || stored.time_spent_ms === undefined ? 0 : stored.time_spent_ms,
+				total_ms: stored.time_spent_ms === undefined ? null : stored.time_spent_ms,
 				pending_ms: 0,
+				pending_time_measured: false,
 				first_read_at: stored.first_read_at || null,
 				link_opened: stored.link_opened === undefined ? null : stored.link_opened,
 				source: stored.source || 'web',
@@ -62,7 +72,7 @@
 		if (!record || !config || !config.tracking_enabled) {
 			return;
 		}
-		if (!record.pending_ms && record.first_read_at === null && record.link_opened === null) {
+		if (!record.pending_time_measured && record.first_read_at === null && record.link_opened === null) {
 			return;
 		}
 		var queued = pending.get(record.entry_id);
@@ -70,18 +80,21 @@
 			queued = {
 				entry_id: record.entry_id,
 				feed_id: record.feed_id,
-				time_spent_ms: 0,
+				time_spent_ms: null,
 				first_read_at: null,
 				link_opened: null
 			};
 			pending.set(record.entry_id, queued);
 		}
-		queued.time_spent_ms += record.pending_ms;
+		if (record.pending_time_measured) {
+			queued.time_spent_ms = (queued.time_spent_ms || 0) + record.pending_ms;
+		}
 		queued.first_read_at = record.first_read_at || queued.first_read_at;
 		if (record.link_opened !== null) {
 			queued.link_opened = record.link_opened;
 		}
 		record.pending_ms = 0;
+		record.pending_time_measured = false;
 	}
 
 	function flush() {
@@ -124,8 +137,12 @@
 		var record = ensureRecord(node);
 		if (record) {
 			var elapsed = Math.max(0, Math.round(window.performance.now() - active.started_at));
+			if (record.total_ms === null) {
+				record.total_ms = 0;
+			}
 			record.total_ms += elapsed;
 			record.pending_ms += elapsed;
+			record.pending_time_measured = true;
 			queueRecord(record);
 			scheduleFlush();
 			publishRecord(node, record);
@@ -145,24 +162,36 @@
 		}
 	}
 
+	function startTimingSession(node) {
+		pauseActive();
+		timingEntries.clear();
+		if (!canStartTiming(node)) {
+			return;
+		}
+		timingEntries.add(entryId(node));
+		switchActive(node);
+	}
+
+	function endTimingSession(node) {
+		var id = entryId(node);
+		if (!id) {
+			return;
+		}
+		timingEntries.delete(id);
+		if (active && active.id === id) {
+			pauseActive();
+		}
+	}
+
 	function chooseActive() {
-		if (active && visible.has(active.node)) {
+		if (active && visible.has(active.node) && isEligible(active.node)) {
 			return;
 		}
-		var current = document.querySelector('.flux.current');
-		if (isEligible(current)) {
+		pauseActive();
+		var current = document.querySelector('.flux.current.active');
+		if (isEligible(current) && visible.has(current)) {
 			switchActive(current);
-			return;
 		}
-		var best = null;
-		var bestRatio = 0;
-		visible.forEach(function (ratio, node) {
-			if (isEligible(node) && ratio > bestRatio) {
-				best = node;
-				bestRatio = ratio;
-			}
-		});
-		switchActive(best);
 	}
 
 	function markRead(node) {
@@ -174,7 +203,7 @@
 		// Keep the active interval running; it ends when the entry is left or
 		// the browser becomes hidden.
 		var previewElapsed = active && active.id === entryId(node)
-			? Math.max(0, Math.round(window.performance.now() - active.started_at)) : 0;
+			? Math.max(0, Math.round(window.performance.now() - active.started_at)) : null;
 		record.first_read_at = Date.now();
 		if (record.link_opened === null) {
 			record.link_opened = false;
@@ -185,9 +214,13 @@
 	}
 
 	function publishRecord(node, record, extraTimeMs) {
+		var timeSpent = record.total_ms;
+		if (extraTimeMs !== null && extraTimeMs !== undefined) {
+			timeSpent = (timeSpent || 0) + extraTimeMs;
+		}
 		var snapshot = {
 			feed_id: record.feed_id,
-			time_spent_ms: record.total_ms + (extraTimeMs || 0),
+			time_spent_ms: timeSpent,
 			link_opened: record.link_opened,
 			first_read_at: record.first_read_at ? new Date(record.first_read_at).toISOString() : null,
 			source: record.source,
@@ -199,11 +232,30 @@
 		}
 	}
 
-	function isPublisherLink(anchor, node) {
+	function isPublisherLink(anchor, node, event) {
 		if (!anchor || !node || anchor.closest('.website, .manage, .share, .labels, .text')) {
 			return false;
 		}
-		return anchor.matches('.go_website, .item.link a');
+		if (anchor.matches('.go_website, .item.link a')) {
+			return true;
+		}
+		return anchor.matches('.item.titleAuthorSummaryDate a.title')
+			&& !!event && (event.ctrlKey || event.metaKey || event.button === 1);
+	}
+
+	function recordPublisherLink(event) {
+		if (event.type === 'auxclick' && event.button !== 1) {
+			return;
+		}
+		var anchor = event.target.closest ? event.target.closest('a') : null;
+		var node = anchor && anchor.closest ? anchor.closest('.flux') : null;
+		if (!isPublisherLink(anchor, node, event) || !isTrackedFeed(node)) return;
+		var record = ensureRecord(node, true);
+		if (!record) return;
+		record.link_opened = true;
+		queueRecord(record);
+		scheduleFlush();
+		publishRecord(node, record);
 	}
 
 	function formatTime(milliseconds) {
@@ -318,6 +370,21 @@
 		}
 	}
 
+	function handleExpansionMutation(mutation) {
+		if (mutation.type !== 'attributes' || mutation.attributeName !== 'class') {
+			return;
+		}
+		var node = mutation.target;
+		if (!node.matches || !node.matches('.flux[data-entry]')) {
+			return;
+		}
+		var oldClass = mutation.oldValue || '';
+		var wasExpanded = oldClass.split(/\s+/).indexOf('active') !== -1;
+		if (wasExpanded && !node.classList.contains('active')) {
+			endTimingSession(node);
+		}
+	}
+
 	function setup() {
 		if (initialized || !getConfig()) {
 			return;
@@ -340,6 +407,7 @@
 		mutationObserver = new MutationObserver(function (mutations) {
 			mutations.forEach(function (mutation) {
 				handleReadStateMutation(mutation);
+				handleExpansionMutation(mutation);
 				if (mutation.type !== 'childList') {
 					return;
 				}
@@ -364,27 +432,19 @@
 		}
 		document.addEventListener('freshrss:openArticle', function (event) {
 			var node = event.target && event.target.closest ? event.target.closest('.flux') : null;
-			if (node) switchActive(node);
+			if (node) startTimingSession(node);
 		});
 		document.addEventListener('freshrss:entryStateChange', function (event) {
 			if (!event.detail || !event.detail.isRead) return;
 			var node = document.getElementById('flux_' + event.detail.id);
 			if (node) markRead(node);
 		});
-		document.addEventListener('click', function (event) {
-			var anchor = event.target.closest ? event.target.closest('a') : null;
-			var node = anchor && anchor.closest ? anchor.closest('.flux') : null;
-			if (!isPublisherLink(anchor, node) || !isTrackedFeed(node)) return;
-			var record = ensureRecord(node);
-			if (!record) return;
-			record.link_opened = true;
-			queueRecord(record);
-			scheduleFlush();
-			publishRecord(node, record);
-		});
+		document.addEventListener('click', recordPublisherLink);
+		document.addEventListener('auxclick', recordPublisherLink);
 		document.addEventListener('visibilitychange', function () {
 			if (document.hidden) {
 				pauseActive();
+				timingEntries.clear();
 				flush();
 			} else {
 				chooseActive();
@@ -392,7 +452,10 @@
 		});
 		window.addEventListener('pagehide', function () { pauseActive(); flush(); });
 		if (config.display_analytics) requestSummary();
-		chooseActive();
+		var initiallyExpanded = document.querySelector('.flux.current.active');
+		if (initiallyExpanded) {
+			startTimingSession(initiallyExpanded);
+		}
 	}
 
 	function start() {

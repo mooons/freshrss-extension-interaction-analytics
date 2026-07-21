@@ -94,7 +94,7 @@ class FakeBlob {
 	}
 }
 
-const entry = new FakeNode(['flux', 'not_read'], {
+const entry = new FakeNode(['flux', 'active', 'not_read'], {
 	'data-entry': '42',
 	'data-feed': '303',
 });
@@ -158,6 +158,7 @@ FakeIntersectionObserver.instance.callback([{
 	intersectionRatio: 1,
 	target: entry,
 }]);
+documentListeners['freshrss:openArticle']({target: entry});
 now = 5000;
 entry.classList.remove('not_read');
 
