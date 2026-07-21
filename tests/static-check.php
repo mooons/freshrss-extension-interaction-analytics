@@ -12,6 +12,7 @@ $required = [
 	'Controllers/interactionAnalyticsController.php',
 	'Models/InteractionAnalyticsDAO.php',
 	'static/interactionAnalytics.js',
+	'static/configure.js',
 	'static/interactionAnalytics.css',
 ];
 foreach ($required as $file) {
@@ -37,6 +38,9 @@ if (!str_contains($configureSource, 'disabled aria-disabled="true"')) {
 }
 if (!str_contains($configureSource, 'greader_ingestion_unavailable')) {
 	exit("Missing unavailable GReader tooltip\n");
+}
+if (!str_contains($configureSource, 'data-confirm-selected') || !str_contains($configureSource, 'interaction-delete-status')) {
+	exit("Missing enhanced delete controls\n");
 }
 
 $scriptSource = (string)file_get_contents(__DIR__ . '/../static/interactionAnalytics.js');

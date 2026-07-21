@@ -78,10 +78,9 @@ $greaderHelp = $this->entries_read_available
 
 <section class="interaction-analytics-management">
 	<h2><?= _t('ext.interaction_analytics.summary_title') ?></h2>
-	<?php if ($this->feed_summaries === []): ?>
-		<p><?= _t('ext.interaction_analytics.no_data') ?></p>
-	<?php else: ?>
-		<table class="table interaction-analytics-summary">
+	<p id="interaction-analytics-no-data"<?= $this->feed_summaries === [] ? '' : ' hidden' ?>><?= _t('ext.interaction_analytics.no_data') ?></p>
+	<?php if ($this->feed_summaries !== []): ?>
+		<table id="interaction-analytics-summary" class="table interaction-analytics-summary">
 			<thead><tr>
 				<th></th>
 				<th><?= _t('ext.interaction_analytics.feed') ?></th>
@@ -94,7 +93,7 @@ $greaderHelp = $this->entries_read_available
 			</tr></thead>
 			<tbody>
 			<?php foreach ($this->feed_summaries as $summary): ?>
-				<tr>
+				<tr data-feed-id="<?= (int)$summary['feed_id'] ?>">
 					<td><input type="checkbox" name="feed_ids[]" value="<?= (int)$summary['feed_id'] ?>" form="interaction-export-form" /></td>
 					<td><?= $escape((string)$summary['feed_name']) ?></td>
 					<td><?= (int)$summary['entries'] ?></td>
@@ -109,7 +108,8 @@ $greaderHelp = $this->entries_read_available
 		</table>
 	<?php endif; ?>
 
-	<div class="interaction-analytics-actions">
+	<p id="interaction-delete-status" class="interaction-analytics-delete-status" role="status" aria-live="polite" hidden></p>
+	<div id="interaction-analytics-actions" class="interaction-analytics-actions"<?= $this->feed_summaries === [] ? ' hidden' : '' ?>>
 		<form id="interaction-export-form" action="<?= _url('interactionAnalytics', 'export') ?>" method="get">
 			<input type="hidden" name="c" value="interactionAnalytics" />
 			<input type="hidden" name="a" value="export" />
@@ -117,10 +117,17 @@ $greaderHelp = $this->entries_read_available
 			<button type="submit" class="btn"><?= _t('ext.interaction_analytics.export_selected') ?></button>
 			<button type="submit" class="btn" name="all" value="1"><?= _t('ext.interaction_analytics.export_all') ?></button>
 		</form>
-		<form id="interaction-delete-form" action="<?= _url('interactionAnalytics', 'delete') ?>" method="post" onsubmit="return confirm('<?= $escape(_t('ext.interaction_analytics.confirm_delete')) ?>');">
+		<form id="interaction-delete-form" action="<?= _url('interactionAnalytics', 'delete') ?>" method="post"
+			data-confirm-selected="<?= $escape(_t('ext.interaction_analytics.confirm_delete_selected')) ?>"
+			data-confirm-all="<?= $escape(_t('ext.interaction_analytics.confirm_delete_all')) ?>"
+			data-success-selected="<?= $escape(_t('ext.interaction_analytics.delete_success_selected')) ?>"
+			data-success-all="<?= $escape(_t('ext.interaction_analytics.delete_success_all')) ?>"
+			data-select-feeds="<?= $escape(_t('ext.interaction_analytics.select_feeds')) ?>"
+			data-delete-failed="<?= $escape(_t('ext.interaction_analytics.delete_failed')) ?>"
+			onsubmit="return this.dataset.enhanced === 'true' || confirm(event.submitter && event.submitter.name === 'all' ? this.dataset.confirmAll : this.dataset.confirmSelected);">
 			<input type="hidden" name="_csrf" value="<?= FreshRSS_Auth::csrfToken() ?>" />
 			<?php foreach ($this->feed_summaries as $summary): ?>
-				<label><input type="checkbox" name="feed_ids[]" value="<?= (int)$summary['feed_id'] ?>" /> <?= $escape((string)$summary['feed_name']) ?></label>
+				<label class="interaction-analytics-delete-option" data-feed-id="<?= (int)$summary['feed_id'] ?>"><input type="checkbox" name="feed_ids[]" value="<?= (int)$summary['feed_id'] ?>" /> <?= $escape((string)$summary['feed_name']) ?></label>
 			<?php endforeach; ?>
 			<button type="submit" class="btn"><?= _t('ext.interaction_analytics.delete_selected') ?></button>
 			<button type="submit" class="btn btn-important" name="all" value="1"><?= _t('ext.interaction_analytics.delete_all') ?></button>

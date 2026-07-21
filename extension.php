@@ -58,6 +58,8 @@ final class InteractionAnalyticsExtension extends Minz_Extension {
 	public function handleConfigureAction(): void {
 		parent::handleConfigureAction();
 		$this->registerTranslates();
+		Minz_View::appendStyle($this->getFileUrl('interactionAnalytics.css'));
+		Minz_View::appendScript($this->getFileUrl('configure.js'));
 
 		if (FreshRSS_Auth::requestReauth()) {
 			return;

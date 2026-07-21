@@ -16,8 +16,12 @@ jobs:
         run: find . -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Repository checks
         run: php tests/static-check.php
+      - name: Delete form fallback
+        run: php tests/delete-fallback.php
       - name: JavaScript syntax
-        run: node --check static/interactionAnalytics.js
+        run: node --check static/interactionAnalytics.js && node --check static/configure.js
+      - name: Delete configuration UX
+        run: node tests/delete-ux.node.js
       - name: FreshRSS 1.29.1 read-state fallback
         run: node tests/read-state-fallback.node.js
       - name: FreshRSS global-context initialization race

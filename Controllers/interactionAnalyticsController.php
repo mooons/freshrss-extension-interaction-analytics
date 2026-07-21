@@ -129,9 +129,33 @@ final class FreshExtension_interactionAnalytics_Controller extends FreshRSS_Acti
 			return;
 		}
 		$all = Minz_Request::paramBoolean('all');
+		$ajax = Minz_Request::paramBoolean('ajax');
 		$feedIds = array_values(array_unique(array_filter(Minz_Request::paramArrayInt('feed_ids'), static fn (int $id): bool => $id > 0)));
+		$redirect = [
+			'c' => 'extension',
+			'a' => 'configure',
+			'params' => ['e' => self::EXTENSION_NAME],
+		];
+		if (!$all && $feedIds === []) {
+			$message = _t('ext.interaction_analytics.select_feeds');
+			if ($ajax) {
+				$this->respond(['ok' => false, 'message' => $message], 400);
+			}
+			Minz_Request::bad($message, $redirect);
+			return;
+		}
 		$ok = $this->extension()->dao()->delete($feedIds, $all);
-		$this->respond(['ok' => $ok], $ok ? 200 : 500);
+		$message = $ok
+			? _t($all ? 'ext.interaction_analytics.delete_success_all' : 'ext.interaction_analytics.delete_success_selected')
+			: _t('ext.interaction_analytics.delete_failed');
+		if ($ajax) {
+			$this->respond(['ok' => $ok, 'message' => $message], $ok ? 200 : 500);
+		}
+		if ($ok) {
+			Minz_Request::good($message, $redirect);
+		} else {
+			Minz_Request::bad($message, $redirect);
+		}
 	}
 
 	/** @return list<string> */

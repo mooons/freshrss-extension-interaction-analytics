@@ -52,7 +52,12 @@
 .interaction-analytics-actions form {
 	display: inline-flex;
 	align-items: center;
+	flex-wrap: wrap;
 	gap: .65em;
+}
+
+.interaction-analytics-delete-status {
+	margin-block: 1em 0;
 }
 
 .interaction-analytics-feed-list {
