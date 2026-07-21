@@ -20,3 +20,5 @@ jobs:
         run: node --check static/interactionAnalytics.js
       - name: FreshRSS 1.29.1 read-state fallback
         run: node tests/read-state-fallback.node.js
+      - name: FreshRSS global-context initialization race
+        run: node tests/init-race.node.js

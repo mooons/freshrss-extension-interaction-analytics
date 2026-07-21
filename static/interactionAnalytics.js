@@ -375,9 +375,21 @@
 		chooseActive();
 	}
 
-	if (document.readyState !== 'loading' && getConfig()) {
+	function start() {
+		if (initialized || !getConfig()) {
+			return;
+		}
+		if (document.readyState === 'loading') {
+			document.addEventListener('DOMContentLoaded', setup, {once: true});
+			return;
+		}
 		setup();
+	}
+
+	if (getConfig()) {
+		start();
 	} else {
-		document.addEventListener('freshrss:globalContextLoaded', setup, {once: true});
+		document.addEventListener('freshrss:globalContextLoaded', start, {once: true});
+		document.addEventListener('DOMContentLoaded', start, {once: true});
 	}
 }());
