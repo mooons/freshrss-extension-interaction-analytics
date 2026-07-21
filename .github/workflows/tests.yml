@@ -24,3 +24,5 @@ jobs:
         run: node tests/init-race.node.js
       - name: Active-time leave boundary
         run: node tests/active-time-boundary.node.js
+      - name: Normal-view title link detection
+        run: node tests/publisher-link-detection.node.js

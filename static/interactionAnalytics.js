@@ -203,7 +203,7 @@
 		if (!anchor || !node || anchor.closest('.website, .manage, .share, .labels, .text')) {
 			return false;
 		}
-		return anchor.matches('.go_website, .item.titleAuthorSummaryDate a.title, .item.link a');
+		return anchor.matches('.go_website, .item.link a');
 	}
 
 	function formatTime(milliseconds) {
