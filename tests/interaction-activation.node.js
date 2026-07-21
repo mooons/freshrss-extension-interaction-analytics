@@ -237,6 +237,33 @@ async function collapsingEntryEndsTimer() {
 	assert.equal(harness.beacons[0].payload.events[0].time_spent_ms, 4000, 'time must end when the entry is collapsed');
 }
 
+async function instantNavigationRecordsZeroTime() {
+	const harness = createHarness(['flux', 'active', 'not_read']);
+	harness.intersectionObserver.callback([{
+		isIntersecting: true,
+		intersectionRatio: 1,
+		target: harness.entry,
+	}]);
+	harness.documentListeners['freshrss:openArticle']({target: harness.entry});
+	harness.entry.classList.remove('active');
+	await delay(350);
+	assert.equal(harness.beacons.length, 1, 'leaving immediately must still create telemetry');
+	assert.equal(harness.beacons[0].payload.events[0].time_spent_ms, 0, 'an immediate navigation should record a measured 0s interval');
+}
+
+async function openingEntryQueuesProvisionalZero() {
+	const harness = createHarness(['flux', 'active', 'not_read']);
+	harness.intersectionObserver.callback([{
+		isIntersecting: true,
+		intersectionRatio: 1,
+		target: harness.entry,
+	}]);
+	harness.documentListeners['freshrss:openArticle']({target: harness.entry});
+	await delay(350);
+	assert.equal(harness.beacons.length, 1, 'opening an unread entry must create telemetry before mark-read completes');
+	assert.equal(harness.beacons[0].payload.events[0].time_spent_ms, 0, 'the provisional measured interval should be 0 ms');
+}
+
 async function hidingPageEndsTimingSession() {
 	const harness = createHarness(['flux', 'active', 'not_read']);
 	harness.intersectionObserver.callback([{
@@ -272,6 +299,8 @@ Promise.allSettled([
 	collapsedPublisherLinkIsRecorded(),
 	modifiedCollapsedTitleIsRecorded(),
 	collapsingEntryEndsTimer(),
+	instantNavigationRecordsZeroTime(),
+	openingEntryQueuesProvisionalZero(),
 	hidingPageEndsTimingSession(),
 	initiallyExpandedEntryStartsTimer(),
 ]).then(results => {

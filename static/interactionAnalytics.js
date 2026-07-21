@@ -169,6 +169,16 @@
 			return;
 		}
 		timingEntries.add(entryId(node));
+		var record = ensureRecord(node);
+		if (record) {
+			if (record.total_ms === null) {
+				record.total_ms = 0;
+			}
+			record.pending_time_measured = true;
+			queueRecord(record);
+			scheduleFlush();
+			publishRecord(node, record);
+		}
 		switchActive(node);
 	}
 
