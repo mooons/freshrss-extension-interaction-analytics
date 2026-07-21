@@ -34,12 +34,12 @@
 		return !!node && node.classList.contains('flux') && node.classList.contains('not_read') && isTrackedFeed(node);
 	}
 
-	function ensureRecord(node) {
+	function ensureRecord(node, allowReadRecord) {
 		var id = entryId(node);
 		if (!id || (!isTrackedFeed(node) && !analytics.has(id))) {
 			return null;
 		}
-		if (!analytics.has(id) && !records.has(id) && !node.classList.contains('not_read')) {
+		if (!analytics.has(id) && !records.has(id) && !node.classList.contains('not_read') && !allowReadRecord) {
 			return null;
 		}
 		if (!records.has(id)) {
@@ -161,7 +161,7 @@
 	}
 
 	function markRead(node) {
-		var record = ensureRecord(node);
+		var record = ensureRecord(node, true);
 		if (!record || record.first_read_at !== null) {
 			return;
 		}
@@ -281,6 +281,23 @@
 		}
 	}
 
+	function handleReadStateMutation(mutation) {
+		if (mutation.type !== 'attributes' || mutation.attributeName !== 'class') {
+			return;
+		}
+		var node = mutation.target;
+		if (!node.matches || !node.matches('.flux[data-entry]')) {
+			return;
+		}
+		var oldClass = mutation.oldValue || '';
+		var wasUnread = oldClass.split(/\s+/).indexOf('not_read') !== -1;
+		if (wasUnread && !node.classList.contains('not_read')) {
+			// FreshRSS 1.29.1 removes `not_read` after the mark-read request
+			// succeeds, but does not dispatch freshrss:entryStateChange.
+			markRead(node);
+		}
+	}
+
 	function setup() {
 		if (initialized || !getConfig()) {
 			return;
@@ -302,6 +319,10 @@
 		document.querySelectorAll('.flux[data-entry]').forEach(observeNode);
 		mutationObserver = new MutationObserver(function (mutations) {
 			mutations.forEach(function (mutation) {
+				handleReadStateMutation(mutation);
+				if (mutation.type !== 'childList') {
+					return;
+				}
 				mutation.addedNodes.forEach(function (node) {
 					if (node.nodeType === 1) {
 						if (node.matches('.flux[data-entry]')) observeNode(node);
@@ -312,7 +333,15 @@
 			requestSummary();
 		});
 		var stream = document.getElementById('stream');
-		if (stream) mutationObserver.observe(stream, {childList: true, subtree: true});
+		if (stream) {
+			mutationObserver.observe(stream, {
+				attributes: true,
+				attributeFilter: ['class'],
+				attributeOldValue: true,
+				childList: true,
+				subtree: true
+			});
+		}
 		document.addEventListener('freshrss:openArticle', function (event) {
 			var node = event.target && event.target.closest ? event.target.closest('.flux') : null;
 			if (node) switchActive(node);

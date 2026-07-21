@@ -39,4 +39,16 @@ if (!str_contains($configureSource, 'greader_ingestion_unavailable')) {
 	exit("Missing unavailable GReader tooltip\n");
 }
 
+$scriptSource = (string)file_get_contents(__DIR__ . '/../static/interactionAnalytics.js');
+foreach ([
+	'attributeFilter: [\'class\']',
+	'attributeOldValue: true',
+	'not_read',
+	'markRead(node)',
+] as $requiredFallbackCode) {
+	if (!str_contains($scriptSource, $requiredFallbackCode)) {
+		exit("Missing read-state fallback code: {$requiredFallbackCode}\n");
+	}
+}
+
 echo "Static extension checks passed.\n";

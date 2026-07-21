@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Interaction Analytics fallback fixture</title></head>
+<body>
+<main id="stream">
+	<div id="flux_42" class="flux not_read" data-entry="42" data-feed="303">
+		<ul class="flux_header">
+			<li class="item titleAuthorSummaryDate">
+				<a class="title" href="https://example.test/article">Fixture entry</a>
+			</li>
+		</ul>
+	</div>
+</main>
+<script>
+window.__beacons = [];
+window.context = {
+	extensions: {
+		interaction_analytics: {
+			tracking_enabled: true,
+			display_analytics: false,
+			tracked_feed_ids: [303],
+			csrf: 'fixture',
+			urls: {record: '/record', summary: '/summary'},
+			i18n: {
+				time: 'Active reading time: %s',
+				opened: 'Publisher link opened',
+				not_opened: 'Publisher link not opened',
+				unknown: 'Publisher-link state unavailable',
+				web_source: 'Measured in FreshRSS web UI',
+				greader_source: 'Read state synchronized by a GReader client'
+			}
+		}
+	}
+};
+navigator.sendBeacon = function (url, blob) {
+	blob.text().then(function (body) {
+		window.__beacons.push({url: url, payload: JSON.parse(body)});
+	});
+	return true;
+};
+</script>
+<script src="../../static/interactionAnalytics.js"></script>
+</body>
+</html>

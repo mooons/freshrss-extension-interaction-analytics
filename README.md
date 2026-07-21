@@ -10,7 +10,9 @@ This standalone user extension records optional reading interactions for a Fresh
 > hook. It was added by [FreshRSS commit
 > `310bcb5e902e5dea757fd8ea86c6d3e5cb87a19d`](https://github.com/FreshRSS/FreshRSS/commit/310bcb5e902e5dea757fd8ea86c6d3e5cb87a19d);
 > enable the setting only after that change is included in a released FreshRSS
-> version. Browser-side telemetry does not require this hook.
+> version. Browser-side telemetry does not require this hook: it uses
+> `freshrss:entryStateChange` when available and observes the confirmed
+> `not_read` class transition as a fallback on FreshRSS `1.29.1`.
 
 ## Features
 
