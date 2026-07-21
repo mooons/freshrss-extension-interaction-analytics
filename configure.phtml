@@ -12,6 +12,9 @@ $formatMilliseconds = static function (int $milliseconds): string {
 		$seconds %= 60;
 		return $minutes . 'm ' . $seconds . 's';
 	};
+$greaderHelp = $this->entries_read_available
+	? _t('ext.interaction_analytics.greader_ingestion_help')
+	: _t('ext.interaction_analytics.greader_ingestion_unavailable');
 ?>
 <form action="<?= _url('extension', 'configure', 'e', urlencode($this->getName())) ?>" method="post" data-auto-leave-validation="1">
 	<input type="hidden" name="_csrf" value="<?= FreshRSS_Auth::csrfToken() ?>" />
@@ -37,6 +40,18 @@ $formatMilliseconds = static function (int $milliseconds): string {
 		<div class="group-controls">
 			<input type="checkbox" id="interaction-preserve-metadata" name="preserve_historical_metadata" value="1" <?= $this->preserve_historical_metadata ? 'checked' : '' ?> />
 			<label for="interaction-preserve-metadata"><?= _t('ext.interaction_analytics.preserve_metadata_enable') ?></label>
+		</div>
+	</div>
+	<div class="form-group interaction-analytics-greader-option<?= $this->entries_read_available ? '' : ' interaction-analytics-option-unavailable' ?>">
+		<label class="group-name" for="interaction-greader-ingestion">
+			<?= _t('ext.interaction_analytics.greader_ingestion') ?>
+			<span class="help" title="<?= $escape($greaderHelp) ?>" aria-label="<?= $escape($greaderHelp) ?>">?</span>
+		</label>
+		<div class="group-controls" title="<?= $escape($greaderHelp) ?>">
+			<input type="checkbox" id="interaction-greader-ingestion" name="greader_ingestion_enabled" value="1"
+				<?= $this->greader_ingestion_enabled ? 'checked' : '' ?>
+				<?= $this->entries_read_available ? '' : 'disabled aria-disabled="true"' ?> />
+			<label for="interaction-greader-ingestion"><?= _t('ext.interaction_analytics.enable_greader_ingestion') ?></label>
 		</div>
 	</div>
 

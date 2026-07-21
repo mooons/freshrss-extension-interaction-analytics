@@ -54,3 +54,12 @@
 .interaction-analytics-feed-option input {
 	margin-inline-end: .45em;
 }
+
+.interaction-analytics-option-unavailable {
+	opacity: .58;
+}
+
+.interaction-analytics-option-unavailable .group-controls,
+.interaction-analytics-option-unavailable label {
+	cursor: not-allowed;
+}

@@ -6,6 +6,7 @@ final class InteractionAnalyticsExtension extends Minz_Extension {
 	private const CONFIG_FEEDS = 'tracked_feed_ids';
 	private const CONFIG_PRESERVE = 'preserve_historical_metadata';
 	private const CONFIG_DISPLAY = 'display_analytics';
+	private const CONFIG_GREADER_INGESTION = 'greader_ingestion_enabled';
 
 	/** @var list<FreshRSS_Feed> */
 	public array $feeds = [];
@@ -14,6 +15,8 @@ final class InteractionAnalyticsExtension extends Minz_Extension {
 	public bool $tracking_enabled = false;
 	public bool $preserve_historical_metadata = false;
 	public bool $display_analytics = true;
+	public bool $greader_ingestion_enabled = false;
+	public bool $entries_read_available = false;
 	/** @var list<int> */
 	public array $tracked_feed_ids = [];
 
@@ -28,7 +31,10 @@ final class InteractionAnalyticsExtension extends Minz_Extension {
 		$this->registerViews();
 		$this->registerTranslates();
 		$this->registerHook(Minz_HookType::JsVars, [$this, 'addJsVars']);
-		$this->registerHook(Minz_HookType::EntriesRead, [$this, 'recordApiRead']);
+		$entriesReadHook = $this->entriesReadHook();
+		if ($entriesReadHook !== null && $this->greaderIngestionEnabled()) {
+			$this->registerHook($entriesReadHook, [$this, 'recordApiRead']);
+		}
 
 		if (!$this->isApiRequest() && ($this->displayAnalytics() || $this->trackingEnabled())) {
 			Minz_View::appendStyle($this->getFileUrl('interactionAnalytics.css'));
@@ -69,6 +75,10 @@ final class InteractionAnalyticsExtension extends Minz_Extension {
 			$this->setUserConfigurationValue(self::CONFIG_FEEDS, $feedIds);
 			$this->setUserConfigurationValue(self::CONFIG_PRESERVE, Minz_Request::paramBoolean(self::CONFIG_PRESERVE));
 			$this->setUserConfigurationValue(self::CONFIG_DISPLAY, Minz_Request::paramBoolean(self::CONFIG_DISPLAY));
+			$this->setUserConfigurationValue(
+				self::CONFIG_GREADER_INGESTION,
+				$this->entriesReadAvailable() && Minz_Request::paramBoolean(self::CONFIG_GREADER_INGESTION)
+			);
 			FreshRSS_UserDAO::touch();
 
 			Minz_Request::good(_t('feedback.conf.updated'), [
@@ -79,6 +89,8 @@ final class InteractionAnalyticsExtension extends Minz_Extension {
 		$this->tracking_enabled = $this->trackingEnabled();
 		$this->preserve_historical_metadata = $this->preserveHistoricalMetadata();
 		$this->display_analytics = $this->displayAnalytics();
+		$this->entries_read_available = $this->entriesReadAvailable();
+		$this->greader_ingestion_enabled = $this->greaderIngestionEnabled();
 		$this->tracked_feed_ids = $this->trackedFeedIds();
 		$this->feeds = array_values(FreshRSS_Factory::createFeedDao()->listFeeds());
 		$this->feed_summaries = $this->dao()->feedSummaries();
@@ -89,6 +101,7 @@ final class InteractionAnalyticsExtension extends Minz_Extension {
 		$vars['interaction_analytics'] = [
 			'tracking_enabled' => $this->trackingEnabled(),
 			'display_analytics' => $this->displayAnalytics(),
+			'greader_ingestion_enabled' => $this->greaderIngestionEnabled(),
 			'tracked_feed_ids' => $this->trackedFeedIds(),
 			'csrf' => FreshRSS_Auth::csrfToken(),
 			'urls' => [
@@ -109,7 +122,7 @@ final class InteractionAnalyticsExtension extends Minz_Extension {
 
 	/** @param array<int|string> $ids */
 	public function recordApiRead(array $ids, bool $isRead): void {
-		if (!$isRead || !$this->trackingEnabled() || !$this->isGReaderRequest()) {
+		if (!$isRead || !$this->trackingEnabled() || !$this->greaderIngestionEnabled() || !$this->isGReaderRequest()) {
 			return;
 		}
 		$ids = array_values(array_filter(array_map('strval', $ids), static fn (string $id): bool => ctype_digit($id)));
@@ -136,6 +149,15 @@ final class InteractionAnalyticsExtension extends Minz_Extension {
 		return $this->getUserConfigurationBool(self::CONFIG_DISPLAY) ?? true;
 	}
 
+	public function greaderIngestionEnabled(): bool {
+		return $this->entriesReadAvailable()
+			&& ($this->getUserConfigurationBool(self::CONFIG_GREADER_INGESTION) ?? false);
+	}
+
+	public function entriesReadAvailable(): bool {
+		return $this->entriesReadHook() !== null;
+	}
+
 	/** @return list<int> */
 	public function trackedFeedIds(): array {
 		$ids = $this->getUserConfigurationArray(self::CONFIG_FEEDS) ?? [];
@@ -148,6 +170,10 @@ final class InteractionAnalyticsExtension extends Minz_Extension {
 			require_once $this->getPath() . '/Models/InteractionAnalyticsDAO.php';
 		}
 		return $this->dao ??= new InteractionAnalyticsDAO();
+	}
+
+	private function entriesReadHook(): ?Minz_HookType {
+		return Minz_HookType::tryFrom('entries_read');
 	}
 
 	private function isApiRequest(): bool {
