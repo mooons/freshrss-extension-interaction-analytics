@@ -15,7 +15,7 @@ return [
 		'greader_ingestion_unavailable' => 'Unavailable on this FreshRSS version: the EntriesRead hook is not provided, so GReader/Reeder Classic read-state ingestion cannot be enabled. Browser-side telemetry remains available.',
 		'tracked_feeds' => 'Feeds to track',
 		'source_group' => 'Source group',
-		'source_groups_help' => 'To share source learning, enter or choose the same group name for feeds from one website (for example, Keylol and Keylol Full → Keylol). Leave blank for a separate source. Group names ignore case and extra spaces. Article bodies, feedback, and analytics remain per feed; the model uses titles, not bodies.',
+		'source_groups_help' => 'Choose an existing feed name to share its source learning (for example, choose Keylol for Keylol Full). If that feed has no group, its matching group is filled in too. Save to apply the sharing shown below. You can also enter the same new group name for several feeds. Blank keeps a feed separate. Group names ignore case and extra spaces; article bodies, feedback, and analytics remain per feed.',
 		'source_group_shared' => 'Shares source learning with: %s',
 		'source_group_only' => 'Only this tracked feed uses this group. Give another feed the same group name to share learning.',
 		'source_group_separate' => 'Separate source',

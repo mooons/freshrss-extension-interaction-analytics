@@ -66,7 +66,10 @@ features.
 
 There is one personal model across all selected feeds. In **Feeds to track**,
 give variants of the same website the same **Source group**, for example
-`Keylol` for both Keylol and Keylol Full. Group names ignore case and extra
+`Keylol` for both Keylol and Keylol Full. Choosing another feed's name also
+fills that feed's blank group, so choosing `Keylol` on Keylol Full includes
+the original feed. Review the sharing summary and save to apply it. Existing
+explicit group assignments are preserved. Group names ignore case and extra
 spaces; suggestions and a live sharing summary help reuse a name. Blank keeps
 a feed's source weight separate. Sharing combines only the learned source
 weight: article bodies, entry feedback, tracking selection, and analytics stay

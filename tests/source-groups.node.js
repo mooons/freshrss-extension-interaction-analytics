@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 function row(feedName, checked = true) {
-	const input = {value: '', defaultValue: ''};
+	const input = {type: 'text', value: '', defaultValue: ''};
 	const checkbox = {checked};
 	const status = {textContent: ''};
 	return {
@@ -43,6 +43,14 @@ vm.runInNewContext(fs.readFileSync(`${__dirname}/../static/configure.js`, 'utf8'
 });
 assert.equal(rows[0].status.textContent, 'Separate');
 assert.equal(warning.hidden, true);
+rows[1].input.value = 'Keylol';
+handlers.change({target: rows[1].input});
+assert.equal(rows[0].input.value, 'Keylol', 'Choosing an existing feed name must include that feed in the group');
+assert.equal(rows[0].status.textContent, 'Shares with: Keylol Full');
+assert.equal(rows[1].status.textContent, 'Shares with: Keylol');
+rows[0].input.value = '';
+rows[1].input.value = '';
+handlers.input();
 rows[0].input.value = 'New website';
 handlers.input();
 assert.ok(!suggestions.options.includes('New website'), 'Typing must not rebuild and close the native suggestion popup');
@@ -73,4 +81,21 @@ rows[0].input.value = '';
 handlers.input();
 assert.equal(rows[0].status.textContent, 'Separate');
 assert.equal(warning.hidden, false, 'Leaving a saved group must request retraining');
+rows[0].input.value = 'Custom source';
+rows[1].input.value = 'Keylol';
+handlers.change({target: rows[1].input});
+assert.equal(rows[0].input.value, 'Custom source', 'Choosing a feed name must preserve its existing custom group');
+rows[0].input.value = '';
+rows[2].dataset.feedName = 'Keylol';
+handlers.change({target: rows[1].input});
+assert.equal(rows[0].input.value, '', 'Ambiguous duplicate feed names must not choose a feed automatically');
+rows[2].dataset.feedName = 'Other feed';
+rows[0].input.defaultValue = '';
+rows[1].input.defaultValue = 'Keylol';
+vm.runInNewContext(fs.readFileSync(`${__dirname}/../static/configure.js`, 'utf8'), {
+	document, window: {setTimeout(handler) { handler(); }},
+});
+assert.equal(rows[0].input.value, 'Keylol', 'An existing one-sided assignment must include the original feed on reopening settings');
+assert.equal(rows[0].input.defaultValue, '', 'The saved value must stay unchanged until the user submits');
+assert.equal(warning.hidden, false, 'Completing an existing assignment must show that saving triggers retraining');
 console.log('Source-group settings UX passed.');

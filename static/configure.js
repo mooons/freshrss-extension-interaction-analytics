@@ -11,6 +11,19 @@
 		return value.normalize('NFKC').replace(/\s+/g, ' ').trim();
 	}
 
+	function includeNamedFeed(input) {
+		var group = name(input.value || '');
+		if (!group) return;
+		var matches = rows.filter(function (row) {
+			return name(row.dataset.feedName).toLowerCase() === group.toLowerCase();
+		});
+		if (matches.length !== 1) return;
+		var sourceInput = matches[0].querySelector('input[type="text"]');
+		if (sourceInput !== input && !name(sourceInput.value)) {
+			sourceInput.value = group;
+		}
+	}
+
 	function refreshSuggestions() {
 		var names = new Set();
 		rows.forEach(function (row) {
@@ -51,9 +64,13 @@
 	}
 
 	list.addEventListener('input', refresh);
-	list.addEventListener('change', refresh);
+	list.addEventListener('change', function (event) {
+		if (event && event.target && event.target.type === 'text') includeNamedFeed(event.target);
+		refresh();
+	});
 	list.addEventListener('focusin', refreshSuggestions);
 	list.closest('form').addEventListener('reset', function () { window.setTimeout(refresh, 0); });
+	rows.forEach(function (row) { includeNamedFeed(row.querySelector('input[type="text"]')); });
 	refreshSuggestions();
 	refresh();
 }());
