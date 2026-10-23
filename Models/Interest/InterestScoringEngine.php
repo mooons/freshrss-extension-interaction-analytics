@@ -40,7 +40,8 @@ final class InterestScoringEngine {
 		$reasons = [];
 		foreach (array_slice(array_keys($weighted), 0, 3) as $feature) {
 			if (str_starts_with($feature, 'feed:')) {
-				$reasons[] = (string)($entry['feed_name'] ?? ('feed #' . $entry['feed_id']));
+				$group = $this->extractor->sourceGroup((int)$entry['feed_id']);
+				$reasons[] = $group !== '' ? $group : (string)($entry['feed_name'] ?? ('feed #' . $entry['feed_id']));
 			} else {
 				$reasons[] = substr($feature, strpos($feature, ':') + 1);
 			}

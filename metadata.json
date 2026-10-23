@@ -2,7 +2,7 @@
 	"name": "Interaction Analytics",
 	"author": "FreshRSS community",
 	"description": "Measure optional feed interactions and train a private server-side title interest model.",
-	"version": "0.4.0",
+	"version": "0.4.1",
 	"entrypoint": "InteractionAnalytics",
 	"type": "user"
 }

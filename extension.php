@@ -12,6 +12,7 @@ final class InteractionAnalyticsExtension extends Minz_Extension {
 	private const CONFIG_INTEREST_AUTO_TRAIN = 'interest_model_auto_train';
 	private const CONFIG_INTEREST_DISPLAY_MODE = 'interest_display_mode';
 	private const CONFIG_INTEREST_FEEDBACK = 'interest_explicit_feedback';
+	private const CONFIG_SOURCE_GROUPS = 'interest_source_groups';
 
 	/** @var list<FreshRSS_Feed> */
 	public array $feeds = [];
@@ -32,6 +33,8 @@ final class InteractionAnalyticsExtension extends Minz_Extension {
 	public array $interest_model_status = [];
 	/** @var list<int> */
 	public array $tracked_feed_ids = [];
+	/** @var array<int,string> */
+	public array $interest_source_groups = [];
 
 	private ?InteractionAnalyticsDAO $dao = null;
 	private ?InterestSchemaMigrator $schemaMigrator = null;
@@ -111,19 +114,59 @@ final class InteractionAnalyticsExtension extends Minz_Extension {
 
 		if (Minz_Request::isPost()) {
 			$previousFeedIds = $this->trackedFeedIds();
+			$previousSourceGroups = $this->interestSourceGroups();
 			$feedIds = array_values(array_unique(array_filter(
 				Minz_Request::paramArrayInt(self::CONFIG_FEEDS),
 				static fn (int $id): bool => $id > 0
 			)));
 			$currentFeedIds = array_keys(FreshRSS_Factory::createFeedDao()->listFeeds());
 			$feedIds = array_values(array_intersect($feedIds, $currentFeedIds));
+			$sourceGroups = [];
+			foreach (Minz_Request::paramArray(self::CONFIG_SOURCE_GROUPS, plaintext: true) as $id => $name) {
+				if (!in_array((int)$id, $currentFeedIds, true) || !ctype_digit((string)$id)) {
+					continue;
+				}
+				if (!is_string($name) || !mb_check_encoding($name, 'UTF-8')
+						|| mb_strlen($name, 'UTF-8') > 80) {
+					Minz_Request::bad(_t('ext.interaction_analytics.source_group_invalid'));
+					return;
+				}
+				$name = InterestFeatureExtractor::normalizeSourceGroup($name);
+				if (mb_strlen($name, 'UTF-8') > 80) {
+					Minz_Request::bad(_t('ext.interaction_analytics.source_group_invalid'));
+					return;
+				}
+				if ($name !== '') {
+					$sourceGroups[(int)$id] = $name;
+				}
+			}
+			ksort($sourceGroups, SORT_NUMERIC);
+			if (!$this->interestSchemaReady()) {
+				$sourceGroups = $previousSourceGroups;
+			}
 			$displayMode = Minz_Request::paramString(self::CONFIG_INTEREST_DISPLAY_MODE, plaintext: true);
 			if (!in_array($displayMode, ['off', 'score'], true)) {
 				$displayMode = 'score';
 			}
+			$previousFeedIdsSorted = $previousFeedIds;
+			sort($previousFeedIdsSorted, SORT_NUMERIC);
+			$feedIdsSorted = $feedIds;
+			sort($feedIdsSorted, SORT_NUMERIC);
+			$sourceKeys = static fn (array $groups): array => array_map(
+				static fn (string $name): string => mb_strtolower($name, 'UTF-8'), $groups);
+			if ($this->interestSchemaReady()
+					&& ($previousFeedIdsSorted !== $feedIdsSorted || $sourceKeys($previousSourceGroups) !== $sourceKeys($sourceGroups))) {
+				$eligibleRows = $this->dao()->countTelemetryForFeeds($feedIds);
+				if (!$this->modelDao()->resetDerived($eligibleRows, $eligibleRows > 0, $this->nowMs())) {
+					Minz_Request::bad(_t('ext.interaction_analytics.model_settings_failed'));
+					return;
+				}
+			}
 
 			$this->setUserConfigurationValue(self::CONFIG_TRACKING, Minz_Request::paramBoolean(self::CONFIG_TRACKING));
 			$this->setUserConfigurationValue(self::CONFIG_FEEDS, $feedIds);
+			$this->setUserConfigurationValue(self::CONFIG_SOURCE_GROUPS, $sourceGroups);
+			$this->featureExtractor = null;
 			$this->setUserConfigurationValue(self::CONFIG_PRESERVE, Minz_Request::paramBoolean(self::CONFIG_PRESERVE));
 			$this->setUserConfigurationValue(self::CONFIG_DISPLAY, Minz_Request::paramBoolean(self::CONFIG_DISPLAY));
 			$this->setUserConfigurationValue(
@@ -137,16 +180,6 @@ final class InteractionAnalyticsExtension extends Minz_Extension {
 			$this->setUserConfigurationValue(self::CONFIG_INTEREST_AUTO_TRAIN, Minz_Request::paramBoolean(self::CONFIG_INTEREST_AUTO_TRAIN));
 			$this->setUserConfigurationValue(self::CONFIG_INTEREST_DISPLAY_MODE, $displayMode);
 			$this->setUserConfigurationValue(self::CONFIG_INTEREST_FEEDBACK, Minz_Request::paramBoolean(self::CONFIG_INTEREST_FEEDBACK));
-			$previousFeedIdsSorted = $previousFeedIds;
-			sort($previousFeedIdsSorted, SORT_NUMERIC);
-			$feedIdsSorted = $feedIds;
-			sort($feedIdsSorted, SORT_NUMERIC);
-			if ($this->interestSchemaReady() && $previousFeedIdsSorted !== $feedIdsSorted) {
-				$eligibleRows = $this->dao()->countTelemetryForFeeds($feedIds);
-				if (!$this->modelDao()->resetDerived($eligibleRows, $eligibleRows > 0, $this->nowMs())) {
-					Minz_Log::error(__METHOD__ . ': could not invalidate the interest model after tracked feeds changed');
-				}
-			}
 			FreshRSS_UserDAO::touch();
 
 			Minz_Request::good(_t('feedback.conf.updated'), [
@@ -165,6 +198,7 @@ final class InteractionAnalyticsExtension extends Minz_Extension {
 		$this->interest_explicit_feedback = $this->interestExplicitFeedback();
 		$this->interest_schema_ready = $this->interestSchemaReady();
 		$this->tracked_feed_ids = $this->trackedFeedIds();
+		$this->interest_source_groups = $this->interestSourceGroups();
 		$this->feeds = array_values(FreshRSS_Factory::createFeedDao()->listFeeds());
 		$this->feed_summaries = $this->dao()->feedSummaries();
 		$this->interest_model_status = $this->modelStatus();
@@ -293,6 +327,15 @@ final class InteractionAnalyticsExtension extends Minz_Extension {
 		return array_values(array_unique(array_filter($ids, static fn (int $id): bool => $id > 0)));
 	}
 
+	/** @return array<int,string> */
+	public function interestSourceGroups(): array {
+		$groups = $this->getUserConfigurationArray(self::CONFIG_SOURCE_GROUPS) ?? [];
+		$groups = array_filter($groups, static fn ($name, $id): bool =>
+			ctype_digit((string)$id) && (int)$id > 0 && is_string($name) && $name !== '', ARRAY_FILTER_USE_BOTH);
+		ksort($groups, SORT_NUMERIC);
+		return $groups;
+	}
+
 	public function dao(): InteractionAnalyticsDAO {
 		$this->loadInterestClasses();
 		return $this->dao ??= new InteractionAnalyticsDAO($this->interestSchemaReady() ? $this->modelDao() : null);
@@ -385,7 +428,7 @@ final class InteractionAnalyticsExtension extends Minz_Extension {
 	}
 
 	private function featureExtractor(): InterestFeatureExtractor {
-		return $this->featureExtractor ??= new InterestFeatureExtractor();
+		return $this->featureExtractor ??= new InterestFeatureExtractor($this->interestSourceGroups());
 	}
 
 	/** @return array{enabled:bool,tracking_enabled:bool,auto_train:bool,tracked_feed_ids:list<int>} */

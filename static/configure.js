@@ -1,6 +1,66 @@
 (function () {
 	'use strict';
 
+	var list = document.getElementById('interaction-source-groups');
+	if (!list) return;
+	var rows = Array.from(list.querySelectorAll('.interaction-analytics-feed-option'));
+	var warning = document.getElementById('interaction-source-groups-retrain');
+	var suggestions = document.getElementById('interaction-source-group-names');
+
+	function name(value) {
+		return value.normalize('NFKC').replace(/\s+/g, ' ').trim();
+	}
+
+	function refreshSuggestions() {
+		var names = new Set();
+		rows.forEach(function (row) {
+			names.add(row.dataset.feedName);
+			var group = name(row.querySelector('input[type="text"]').value);
+			if (group) names.add(group);
+		});
+		suggestions.replaceChildren();
+		names.forEach(function (value) {
+			var option = document.createElement('option');
+			option.value = value;
+			suggestions.appendChild(option);
+		});
+	}
+
+	function refresh() {
+		var groups = new Map();
+		var changed = false;
+		rows.forEach(function (row) {
+			var input = row.querySelector('input[type="text"]');
+			var group = name(input.value);
+			var key = group.toLowerCase();
+			if (name(input.defaultValue).toLowerCase() !== key) changed = true;
+			if (key && row.querySelector('input[type="checkbox"]').checked) {
+				if (!groups.has(key)) groups.set(key, []);
+				groups.get(key).push(row);
+			}
+		});
+		rows.forEach(function (row) {
+			var key = name(row.querySelector('input[type="text"]').value).toLowerCase();
+			var peers = (groups.get(key) || []).filter(function (peer) { return peer !== row; });
+			row.querySelector('.interaction-source-group-status').textContent = !row.querySelector('input[type="checkbox"]').checked
+				? list.dataset.notTracked : !key ? list.dataset.separate : peers.length
+					? list.dataset.sharedWith.replace('%s', peers.map(function (peer) { return peer.dataset.feedName; }).join(', '))
+					: list.dataset.onlyFeed;
+		});
+		warning.hidden = !changed;
+	}
+
+	list.addEventListener('input', refresh);
+	list.addEventListener('change', refresh);
+	list.addEventListener('focusin', refreshSuggestions);
+	list.closest('form').addEventListener('reset', function () { window.setTimeout(refresh, 0); });
+	refreshSuggestions();
+	refresh();
+}());
+
+(function () {
+	'use strict';
+
 	var form = document.getElementById('interaction-delete-form');
 	if (!form) {
 		return;

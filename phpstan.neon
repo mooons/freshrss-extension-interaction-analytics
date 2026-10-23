@@ -1,5 +1,6 @@
 parameters:
 	level: 5
+	phpVersion: 80200
 	tmpDir: /tmp/interaction-analytics-phpstan
 	paths:
 		- extension.php

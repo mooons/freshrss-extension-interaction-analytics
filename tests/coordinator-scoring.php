@@ -48,9 +48,10 @@ $metadata = [];
 for ($i = 0; $i < 300; $i++) {
 	$id = (string)($i + 1);
 	$positive = $i % 3 === 0;
+	$feedId = $i % 2 === 0 ? 7 : 9;
 	$rows[] = [
 		'entry_id' => $id,
-		'feed_id' => 7,
+		'feed_id' => $feedId,
 		'entry_title' => null,
 		'explicit_feedback' => $positive ? 1 : -1,
 		'favorite_state' => null,
@@ -62,12 +63,12 @@ for ($i = 0; $i < 300; $i++) {
 	$metadata[$id] = [
 		'title' => $positive ? 'Loved recurring topic' : 'Boring recurring bundle',
 		'favorite' => false,
-		'feed_id' => 7,
+		'feed_id' => $feedId,
 		'feed_name' => 'Example feed',
 	];
 }
 $source = new CoordinatorTrainingSource($rows, $metadata);
-$extractor = new InterestFeatureExtractor();
+$extractor = new InterestFeatureExtractor([7 => 'Keylol', 9 => 'Keylol']);
 $pdo = new Minz_PdoSqlite('sqlite::memory:');
 $migrator = new InterestSchemaMigrator('test', $pdo);
 coordinatorAssert($migrator->ensureCurrent($now)['ok'], 'Schema setup failed');
@@ -78,7 +79,7 @@ $settings = static fn (): array => [
 	'enabled' => true,
 	'tracking_enabled' => true,
 	'auto_train' => true,
-	'tracked_feed_ids' => [7],
+	'tracked_feed_ids' => [7, 9],
 ];
 $coordinator = new InterestModelCoordinator(
 	$modelDao,
@@ -97,9 +98,15 @@ coordinatorAssert($scores['status'] === 'ok' && count($scores['entries']) === 2,
 coordinatorAssert($scores['entries']['1']['score'] > $scores['entries']['2']['score'], 'Scoring must use the published server model');
 $cached = $scorer->scoreEntryIds(['1', '2']);
 coordinatorAssert($cached['entries']['1']['cached'] === true && $cached['entries']['2']['cached'] === true, 'Second score batch must use the model-version cache');
+coordinatorAssert($cached['entries']['1']['feed_id'] === 7 && $cached['entries']['2']['feed_id'] === 9, 'Shared learning must preserve the original feed IDs in cached scores');
+coordinatorAssert($modelDao->resetDerived(300, true, $now + 3), 'Changing source groups must reset derived data');
+coordinatorAssert($scorer->scoreEntryIds(['1', '2'])['status'] === 'no_model', 'Old scores must be unavailable until retraining');
+coordinatorAssert($modelDao->state()['force_retrain'] === 1, 'Changing source groups must queue retraining');
+coordinatorAssert($coordinator->trainIfDue($now + 4)['status'] === 'trained', 'Existing records must train again after a group change');
+$modelVersion = (int)$modelDao->state()['model_version'];
 coordinatorAssert($modelDao->storeScores([
 	'999' => ['feed_id' => 8, 'score' => 0.01, 'band' => 'low', 'positive_reasons' => [], 'negative_reasons' => ['private']],
-], 1, $now + 3), 'Could not prepare an untracked cached score');
+], $modelVersion, $now + 5), 'Could not prepare an untracked cached score');
 coordinatorAssert($scorer->scoreEntryIds(['999'])['entries'] === [], 'Cached scores from untracked feeds must not cross the tracked-feed scope');
 
 $insufficientPdo = new Minz_PdoSqlite('sqlite::memory:');

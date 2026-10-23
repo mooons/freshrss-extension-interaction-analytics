@@ -76,6 +76,7 @@ $statusLabels = [
 
 	<fieldset class="interaction-interest-settings<?= $this->interest_schema_ready ? '' : ' interaction-analytics-option-unavailable' ?>">
 		<legend><?= _t('ext.interaction_analytics.interest_model') ?></legend>
+		<p><?= _t('ext.interaction_analytics.interest_model_scope') ?></p>
 		<?php if (!$this->interest_schema_ready): ?>
 			<p class="alert alert-error"><?= $escape($this->interest_schema_error ?? _t('ext.interaction_analytics.model_schema_unavailable')) ?></p>
 		<?php endif; ?>
@@ -126,17 +127,39 @@ $statusLabels = [
 		<?php endif; ?>
 	</fieldset>
 
-	<fieldset class="interaction-analytics-feed-list">
+	<fieldset id="interaction-source-groups" class="interaction-analytics-feed-list"
+		data-shared-with="<?= $escape(_t('ext.interaction_analytics.source_group_shared')) ?>"
+		data-only-feed="<?= $escape(_t('ext.interaction_analytics.source_group_only')) ?>"
+		data-separate="<?= $escape(_t('ext.interaction_analytics.source_group_separate')) ?>"
+		data-not-tracked="<?= $escape(_t('ext.interaction_analytics.source_group_not_tracked')) ?>">
 		<legend><?= _t('ext.interaction_analytics.tracked_feeds') ?></legend>
+		<p id="interaction-source-groups-help"><?= _t('ext.interaction_analytics.source_groups_help') ?></p>
+		<p id="interaction-source-groups-retrain" class="alert alert-warn" role="status"><?= _t('ext.interaction_analytics.source_groups_retrain') ?></p>
 		<?php if ($this->feeds === []): ?>
 			<p><?= _t('ext.interaction_analytics.no_feeds') ?></p>
 		<?php else: foreach ($this->feeds as $feed): ?>
 			<?php $feedId = $feed->id(); ?>
-			<label class="interaction-analytics-feed-option">
-				<input type="checkbox" name="tracked_feed_ids[]" value="<?= $feedId ?>" <?= isset($tracked[$feedId]) ? 'checked' : '' ?> />
-				<span><?= $escape($feed->name()) ?></span>
-			</label>
+			<div class="interaction-analytics-feed-option" data-feed-name="<?= $escape($feed->name()) ?>">
+				<label class="interaction-analytics-feed-name">
+					<input type="checkbox" name="tracked_feed_ids[]" value="<?= $feedId ?>" <?= isset($tracked[$feedId]) ? 'checked' : '' ?> />
+					<span><?= $escape($feed->name()) ?></span>
+				</label>
+				<div class="interaction-source-group-control">
+					<label for="interaction-source-group-<?= $feedId ?>"><?= _t('ext.interaction_analytics.source_group') ?> · <?= $escape($feed->name()) ?></label>
+					<input type="text" id="interaction-source-group-<?= $feedId ?>" name="interest_source_groups[<?= $feedId ?>]"
+						value="<?= $escape($this->interest_source_groups[$feedId] ?? '') ?>" maxlength="80" list="interaction-source-group-names"
+						placeholder="<?= $escape(_t('ext.interaction_analytics.source_group_separate')) ?>"
+						<?= $this->interest_schema_ready ? '' : 'disabled aria-disabled="true"' ?>
+						aria-describedby="interaction-source-groups-help interaction-source-group-status-<?= $feedId ?>" />
+					<small id="interaction-source-group-status-<?= $feedId ?>" class="interaction-source-group-status"></small>
+				</div>
+			</div>
 		<?php endforeach; endif; ?>
+		<datalist id="interaction-source-group-names">
+			<?php foreach (array_unique(array_merge(array_values($this->interest_source_groups), array_map(static fn ($feed): string => $feed->name(), $this->feeds))) as $name): ?>
+				<option value="<?= $escape($name) ?>"></option>
+			<?php endforeach; ?>
+		</datalist>
 	</fieldset>
 
 	<div class="form-group form-actions">

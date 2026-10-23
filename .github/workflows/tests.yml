@@ -40,6 +40,7 @@ jobs:
           php tests/model-persistence.php
           php tests/telemetry-interest-persistence.php
           php tests/coordinator-scoring.php
+          php tests/source-group-settings.php
       - name: FreshRSS coding standards
         run: freshrss/vendor/bin/phpcs -n --standard=freshrss/phpcs.xml extension.php configure.phtml Controllers Models tests/*.php
       - name: PHPStan
@@ -48,6 +49,8 @@ jobs:
         run: node --check static/interactionAnalytics.js && node --check static/interestModel.js && node --check static/configure.js
       - name: Delete configuration UX
         run: node tests/delete-ux.node.js
+      - name: Shared-source configuration UX
+        run: node tests/source-groups.node.js
       - name: FreshRSS 1.29.1 read-state fallback
         run: node tests/read-state-fallback.node.js
       - name: FreshRSS global-context initialization race

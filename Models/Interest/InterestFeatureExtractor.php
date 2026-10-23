@@ -6,6 +6,19 @@ final class InterestFeatureExtractor {
 	private const MAX_TITLE_CODEPOINTS = 512;
 	private const MAX_FEATURES = 128;
 
+	/** @param array<int,string> $sourceGroups */
+	public function __construct(private readonly array $sourceGroups = []) {
+	}
+
+	public static function normalizeSourceGroup(string $name): string {
+		$name = Normalizer::normalize($name, Normalizer::FORM_KC) ?: $name;
+		return trim(preg_replace('/\s+/u', ' ', $name) ?? $name);
+	}
+
+	public function sourceGroup(int $feedId): string {
+		return self::normalizeSourceGroup($this->sourceGroups[$feedId] ?? '');
+	}
+
 	/** @return list<string> */
 	public function extract(string $title, int $feedId): array {
 		$normalized = Normalizer::normalize($title, Normalizer::FORM_KC);
@@ -16,7 +29,9 @@ final class InterestFeatureExtractor {
 		$normalized = mb_substr($normalized, 0, self::MAX_TITLE_CODEPOINTS, 'UTF-8');
 
 		$features = [];
-		$this->add($features, 'feed:' . max(0, $feedId));
+		$group = $this->sourceGroup($feedId);
+		$this->add($features, $group === '' ? 'feed:' . max(0, $feedId)
+			: 'feed:group:' . hash('sha256', mb_strtolower($group, 'UTF-8')));
 
 		$words = [];
 		if (preg_match_all('/[\p{L}\p{N}]+/u', $normalized, $matches) > 0) {

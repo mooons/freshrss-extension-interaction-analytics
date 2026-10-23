@@ -64,6 +64,16 @@ tracked feeds and uses title word/phrase features, CJK character n-grams, and
 feed identity. Article content and interaction outcomes are never scoring
 features.
 
+There is one personal model across all selected feeds. In **Feeds to track**,
+give variants of the same website the same **Source group**, for example
+`Keylol` for both Keylol and Keylol Full. Group names ignore case and extra
+spaces; suggestions and a live sharing summary help reuse a name. Blank keeps
+a feed's source weight separate. Sharing combines only the learned source
+weight: article bodies, entry feedback, tracking selection, and analytics stay
+per feed. Changing groups resets the model and cached scores and queues
+retraining from existing records during maintenance; scores remain unavailable
+until training has enough examples. No telemetry is deleted.
+
 Implicit training examples settle for one hour. Explicit feedback and current
 favorites are eligible immediately; feedback overrides other signals,
 publisher-link opens are positive signals, and a measured session of at most

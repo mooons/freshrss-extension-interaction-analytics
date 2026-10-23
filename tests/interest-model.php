@@ -54,6 +54,20 @@ $cjk = $extractor->extract('新作ゲーム情報', 9);
 assertTrueValue(in_array('c2:新作', $cjk, true), 'CJK character bigrams must be generated');
 assertTrueValue(in_array('c3:新作ゲ', $cjk, true), 'CJK character trigrams must be generated');
 
+$groupedExtractor = new InterestFeatureExtractor([7 => 'Keylol', 9 => '  ＫＥＹＬＯＬ  ']);
+$groupedFeatures = $groupedExtractor->extract('Same title', 7);
+assertSameValue($groupedFeatures, $groupedExtractor->extract('Same title', 9), 'Grouped feed variants must share all scoring features');
+assertTrueValue(!in_array('feed:7', $groupedFeatures, true), 'Grouping must replace the individual feed weight');
+assertSameValue($extractor->extract('Same title', 10), $groupedExtractor->extract('Same title', 10), 'Ungrouped feeds must keep their existing features');
+assertTrueValue($extractor->extract('Same title', 7) !== $extractor->extract('Same title', 9), 'Ungrouped sources must remain distinct');
+assertSameValue('Key lol', InterestFeatureExtractor::normalizeSourceGroup(" Key\t lol  "), 'Group names must normalize whitespace');
+$groupEngine = new InterestScoringEngine($groupedExtractor);
+$groupArtifact = ['bias' => 0.0, 'weights' => [$groupedFeatures[0] => 2.0]];
+$groupScore = $groupEngine->score(['entry_id' => '1', 'feed_id' => 7, 'title' => 'Same title'], $groupArtifact);
+$variantScore = $groupEngine->score(['entry_id' => '2', 'feed_id' => 9, 'title' => 'Same title'], $groupArtifact);
+assertSameValue($groupScore['score'], $variantScore['score'], 'Scoring must apply the shared source weight');
+assertSameValue(['Keylol'], $groupScore['positive_reasons'], 'Source explanations must show the group name');
+
 $now = 2_000_000_000_000;
 $old = $now - 7_200_000;
 $recent = $now - 60_000;
