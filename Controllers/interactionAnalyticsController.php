@@ -24,6 +24,8 @@ final class FreshExtension_interactionAnalytics_Controller extends FreshRSS_Acti
 				'first_read_at' => $row['first_read_at'] === null ? null : gmdate('c', intdiv((int)$row['first_read_at'], 1000)),
 				'source' => (string)$row['source'],
 				'measurement' => (string)$row['measurement'],
+				'favorite_state' => ($row['favorite_state'] ?? null) === null ? null : (bool)$row['favorite_state'],
+				'explicit_feedback' => ($row['explicit_feedback'] ?? null) === null ? null : (int)$row['explicit_feedback'],
 			];
 		}
 		$this->respond(['entries' => $result]);
@@ -71,7 +73,7 @@ final class FreshExtension_interactionAnalytics_Controller extends FreshRSS_Acti
 			$entry = $entryMap[$entryId] ?? null;
 			$existing = $existingMap[$entryId] ?? null;
 			$feedId = $entry?->feedId() ?? (int)($rawEvent['feed_id'] ?? 0);
-			if ($feedId < 1 || ($entry === null && $existing === null)) {
+			if ($feedId < 1 || !in_array($feedId, $tracked, true) || ($entry === null && $existing === null)) {
 				continue;
 			}
 			if ($entry !== null && $existing !== null && (int)$existing['feed_id'] !== $feedId) {
@@ -97,7 +99,7 @@ final class FreshExtension_interactionAnalytics_Controller extends FreshRSS_Acti
 				'link_opened' => $linkOpened,
 				'source' => 'web',
 				'measurement' => 'full',
-				'updated_at' => time(),
+				'updated_at' => $nowMs,
 			];
 			if ($preserve && $entry !== null) {
 				$event['feed_name'] = $feed === null ? null : htmlspecialchars_decode($feed->name(), ENT_QUOTES | ENT_HTML5);
@@ -110,6 +112,94 @@ final class FreshExtension_interactionAnalytics_Controller extends FreshRSS_Acti
 		}
 		$ok = $extension->dao()->recordEvents($events, $tracked);
 		$this->respond(['ok' => $ok, 'accepted' => count($events)], $ok ? 200 : 500);
+	}
+
+	public function scoresAction(): void {
+		$ids = $this->requestIds();
+		$extension = $this->extension();
+		if (!$extension->interestSchemaReady()) {
+			$this->respond(['status' => 'schema_unavailable', 'model_version' => 0, 'entries' => [], 'feedback' => []]);
+		}
+		$result = $extension->scorer()->scoreEntryIds($ids);
+		$feedback = [];
+		$tracked = array_fill_keys($extension->trackedFeedIds(), true);
+		foreach ($extension->dao()->summaryForEntryIds($ids) as $id => $row) {
+			if (!isset($tracked[(int)$row['feed_id']])) {
+				continue;
+			}
+			$feedback[$id] = ($row['explicit_feedback'] ?? null) === null ? null : (int)$row['explicit_feedback'];
+		}
+		$result['feedback'] = $feedback;
+		$this->respond($result);
+	}
+
+	public function feedbackAction(): void {
+		if (!Minz_Request::isPost()) {
+			Minz_Error::error(405);
+			return;
+		}
+		$extension = $this->extension();
+		$entryId = Minz_Request::paramString('entry_id', plaintext: true);
+		$feedback = Minz_Request::paramInt('feedback');
+		if (!$extension->interestSchemaReady() || !$extension->interestModelEnabled()
+				|| !$extension->trackingEnabled() || !$extension->interestExplicitFeedback()
+				|| !ctype_digit($entryId) || !in_array($feedback, [-1, 0, 1], true)) {
+			$this->respond(['ok' => false, 'message' => _t('ext.interaction_analytics.feedback_failed')], 400);
+		}
+		$entry = null;
+		foreach (FreshRSS_Factory::createEntryDao()->listByIds([$entryId], order: 'ASC') as $candidate) {
+			$entry = $candidate;
+			break;
+		}
+		if (!$entry instanceof FreshRSS_Entry || !in_array($entry->feedId(), $extension->trackedFeedIds(), true)) {
+			$this->respond(['ok' => false, 'message' => _t('ext.interaction_analytics.feedback_failed')], 404);
+		}
+		$feed = FreshRSS_Factory::createFeedDao()->listFeeds()[$entry->feedId()] ?? null;
+		$ok = $extension->dao()->recordFeedback(
+			$entry,
+			$feed,
+			$feedback,
+			$extension->preserveHistoricalMetadata(),
+			(int)round(microtime(true) * 1000)
+		);
+		$this->respond([
+			'ok' => $ok,
+			'entry_id' => $entryId,
+			'feedback' => $feedback === 0 ? null : $feedback,
+			'message' => $ok ? _t('ext.interaction_analytics.feedback_saved') : _t('ext.interaction_analytics.feedback_failed'),
+		], $ok ? 200 : 500);
+	}
+
+	public function requestTrainingAction(): void {
+		if (!Minz_Request::isPost()) {
+			Minz_Error::error(405);
+			return;
+		}
+		$extension = $this->extension();
+		$ok = $extension->interestSchemaReady() && $extension->interestModelEnabled()
+			&& $extension->trackingEnabled() && $extension->trackedFeedIds() !== []
+			&& $extension->modelDao()->requestTraining((int)round(microtime(true) * 1000));
+		$message = _t($ok ? 'ext.interaction_analytics.training_requested' : 'ext.interaction_analytics.training_request_failed');
+		if (Minz_Request::paramBoolean('ajax')) {
+			$this->respond(['ok' => $ok, 'message' => $message], $ok ? 200 : 400);
+		}
+		$this->redirectFeedback($ok, $message);
+	}
+
+	public function deleteModelAction(): void {
+		if (!Minz_Request::isPost()) {
+			Minz_Error::error(405);
+			return;
+		}
+		$extension = $this->extension();
+		$remaining = $extension->dao()->countTelemetry();
+		$ok = $extension->interestSchemaReady()
+			&& $extension->modelDao()->resetDerived($remaining, $remaining > 0, (int)round(microtime(true) * 1000));
+		$message = _t($ok ? 'ext.interaction_analytics.model_deleted' : 'ext.interaction_analytics.model_delete_failed');
+		if (Minz_Request::paramBoolean('ajax')) {
+			$this->respond(['ok' => $ok, 'message' => $message], $ok ? 200 : 500);
+		}
+		$this->redirectFeedback($ok, $message);
 	}
 
 	public function exportAction(): void {
@@ -175,6 +265,20 @@ final class FreshExtension_interactionAnalytics_Controller extends FreshRSS_Acti
 			throw new RuntimeException('Interaction Analytics extension is unavailable.');
 		}
 		return $extension;
+	}
+
+	private function redirectFeedback(bool $ok, string $message): never {
+		$redirect = [
+			'c' => 'extension',
+			'a' => 'configure',
+			'params' => ['e' => self::EXTENSION_NAME],
+		];
+		if ($ok) {
+			Minz_Request::good($message, $redirect);
+		} else {
+			Minz_Request::bad($message, $redirect);
+		}
+		exit;
 	}
 
 	private function respond(array $payload, int $status = 200): never {

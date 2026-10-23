@@ -9,17 +9,43 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: FreshRSS/FreshRSS
+          ref: 1.29.1
+          path: freshrss
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
+          extensions: intl, mbstring, pdo_sqlite
+          coverage: none
+      - name: Install FreshRSS development tools
+        run: composer install --working-dir=freshrss --no-interaction --no-progress
+      - name: Mount extension into FreshRSS 1.29.1
+        run: ln -s "${GITHUB_WORKSPACE}" freshrss/extensions/xExtension-InteractionAnalytics
       - name: PHP syntax
-        run: find . -name '*.php' -print0 | xargs -0 -n1 php -l
+        run: find . -path './freshrss' -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Repository checks
         run: php tests/static-check.php
       - name: Delete form fallback
         run: php tests/delete-fallback.php
+      - name: Pure interest model
+        run: php tests/interest-model.php
+      - name: FreshRSS 1.29.1 SQLite integration
+        env:
+          FRESHRSS_PATH: ${{ github.workspace }}/freshrss
+        run: |
+          php tests/schema-migration.php
+          php tests/freshrss-1.29.1-compat.php
+          php tests/model-persistence.php
+          php tests/telemetry-interest-persistence.php
+          php tests/coordinator-scoring.php
+      - name: FreshRSS coding standards
+        run: freshrss/vendor/bin/phpcs -n --standard=freshrss/phpcs.xml extension.php configure.phtml Controllers Models tests/*.php
+      - name: PHPStan
+        run: freshrss/vendor/bin/phpstan analyse --no-progress -c phpstan.neon
       - name: JavaScript syntax
-        run: node --check static/interactionAnalytics.js && node --check static/configure.js
+        run: node --check static/interactionAnalytics.js && node --check static/interestModel.js && node --check static/configure.js
       - name: Delete configuration UX
         run: node tests/delete-ux.node.js
       - name: FreshRSS 1.29.1 read-state fallback
@@ -32,3 +58,64 @@ jobs:
         run: node tests/interaction-activation.node.js
       - name: Normal-view title link detection
         run: node tests/publisher-link-detection.node.js
+      - name: Interest score and feedback UI
+        run: node tests/interest-ui.node.js
+
+  databases:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: test
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: FreshRSS/FreshRSS
+          ref: 1.29.1
+          path: freshrss
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: intl, mbstring, pdo_mysql, pdo_pgsql
+          coverage: none
+      - name: Mount extension into FreshRSS 1.29.1
+        run: ln -s "${GITHUB_WORKSPACE}" freshrss/extensions/xExtension-InteractionAnalytics
+      - name: MySQL migration
+        env:
+          FRESHRSS_PATH: ${{ github.workspace }}/freshrss
+          TEST_DB_DRIVER: mysql
+          TEST_DB_DSN: mysql:host=127.0.0.1;port=3306;dbname=test;charset=utf8mb4
+          TEST_DB_USER: root
+          TEST_DB_PASSWORD: root
+        run: php tests/schema-migration-database.php
+      - name: PostgreSQL migration
+        env:
+          FRESHRSS_PATH: ${{ github.workspace }}/freshrss
+          TEST_DB_DRIVER: pgsql
+          TEST_DB_DSN: pgsql:host=127.0.0.1;port=5432;dbname=test
+          TEST_DB_USER: postgres
+          TEST_DB_PASSWORD: postgres
+        run: php tests/schema-migration-database.php

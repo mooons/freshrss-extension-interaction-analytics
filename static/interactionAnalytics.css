@@ -83,3 +83,100 @@
 .interaction-analytics-option-unavailable label {
 	cursor: not-allowed;
 }
+
+.interaction-interest-settings {
+	margin-block: 1.2em;
+	padding: .7em 1em;
+}
+
+.interaction-interest,
+.interaction-interest-actions {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: .35em;
+}
+
+.interaction-interest {
+	margin: 0;
+	font-size: .78em;
+	width: max-content;
+	max-width: 100%;
+	white-space: nowrap;
+	position: relative;
+	z-index: 1;
+}
+
+/* Keep controls on the title row instead of creating a compact row that
+ * themes may render on top of the entry title. */
+.flux .flux_header .item.titleAuthorSummaryDate.interaction-interest-title-layout {
+	grid-template-columns: max-content minmax(0, 1fr) auto;
+	grid-template-areas: "interest title date"
+		". summary .";
+}
+
+.flux .flux_header .titleAuthorSummaryDate > .interaction-interest {
+	grid-area: interest;
+	align-self: center;
+}
+
+.flux .flux_header .titleAuthorSummaryDate.interaction-interest-title-layout > .title {
+	min-width: 0;
+}
+
+/* Reading view uses a regular heading rather than the compact header grid. */
+.flux_content h1.title.interaction-interest-title-layout {
+	display: flex;
+	align-items: center;
+	gap: .5rem;
+}
+
+.flux_content h1.title.interaction-interest-title-layout > .interaction-interest {
+	flex: 0 0 auto;
+	font-size: .45em;
+}
+
+.flux_content h1.title.interaction-interest-title-layout > .go_website {
+	min-width: 0;
+}
+
+.interaction-interest-score,
+.interaction-interest-feedback {
+	display: inline-flex;
+	align-items: center;
+	padding: .1em .4em;
+	border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+	border-radius: .35em;
+	background: transparent;
+	color: inherit;
+}
+
+.interaction-interest-score[data-band="low"] {
+	opacity: .72;
+}
+
+.interaction-interest-feedback {
+	cursor: pointer;
+	font: inherit;
+}
+
+.interaction-interest-feedback[aria-pressed="true"] {
+	background: color-mix(in srgb, currentColor 15%, transparent);
+	font-weight: 600;
+}
+
+.interaction-interest-error {
+	color: var(--error-text-color, #b00020);
+}
+
+.interaction-interest-management {
+	margin-block: 1.5em;
+}
+
+.interaction-interest-status {
+	max-width: 48em;
+}
+
+.interaction-interest-status th {
+	text-align: start;
+}

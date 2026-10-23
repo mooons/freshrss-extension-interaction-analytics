@@ -1,0 +1,12 @@
+parameters:
+	level: 5
+	tmpDir: /tmp/interaction-analytics-phpstan
+	paths:
+		- extension.php
+		- Controllers
+		- Models
+	bootstrapFiles:
+		- freshrss/tests/bootstrap.php
+	scanFiles:
+		- freshrss/lib/Minz/Translate.php
+	treatPhpDocTypesAsCertain: false

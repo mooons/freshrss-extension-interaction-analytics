@@ -15,6 +15,25 @@ $formatMilliseconds = static function (int $milliseconds): string {
 $greaderHelp = $this->entries_read_available
 	? _t('ext.interaction_analytics.greader_ingestion_help')
 	: _t('ext.interaction_analytics.greader_ingestion_unavailable');
+$modelStatus = $this->interest_model_status;
+$modelMetrics = is_array($modelStatus['metrics'] ?? null) ? $modelStatus['metrics'] : [];
+$formatTimestamp = static function (mixed $milliseconds): string {
+	return is_numeric($milliseconds) && (int)$milliseconds > 0
+		? gmdate('Y-m-d H:i:s \U\T\C', intdiv((int)$milliseconds, 1000))
+		: '—';
+};
+$formatPercent = static function (mixed $value): string {
+	return is_numeric($value) ? number_format((float)$value * 100, 1) . '%' : '—';
+};
+$statusLabels = [
+	'schema_unavailable' => _t('ext.interaction_analytics.model_status_schema_unavailable'),
+	'running' => _t('ext.interaction_analytics.model_status_running'),
+	'requested' => _t('ext.interaction_analytics.model_status_requested'),
+	'trained' => _t('ext.interaction_analytics.model_status_trained'),
+	'insufficient_data' => _t('ext.interaction_analytics.model_status_insufficient'),
+	'failed' => _t('ext.interaction_analytics.model_status_failed'),
+	'untrained' => _t('ext.interaction_analytics.model_status_untrained'),
+];
 ?>
 <form action="<?= _url('extension', 'configure', 'e', urlencode($this->getName())) ?>" method="post" data-auto-leave-validation="1">
 	<input type="hidden" name="_csrf" value="<?= FreshRSS_Auth::csrfToken() ?>" />
@@ -55,6 +74,58 @@ $greaderHelp = $this->entries_read_available
 		</div>
 	</div>
 
+	<fieldset class="interaction-interest-settings<?= $this->interest_schema_ready ? '' : ' interaction-analytics-option-unavailable' ?>">
+		<legend><?= _t('ext.interaction_analytics.interest_model') ?></legend>
+		<?php if (!$this->interest_schema_ready): ?>
+			<p class="alert alert-error"><?= $escape($this->interest_schema_error ?? _t('ext.interaction_analytics.model_schema_unavailable')) ?></p>
+		<?php endif; ?>
+		<div class="form-group">
+			<label class="group-name" for="interaction-interest-enabled"><?= _t('ext.interaction_analytics.interest_model_enabled') ?></label>
+			<div class="group-controls">
+				<input type="checkbox" id="interaction-interest-enabled" name="interest_model_enabled" value="1"
+					<?= $this->interest_model_enabled ? 'checked' : '' ?> <?= $this->interest_schema_ready ? '' : 'disabled aria-disabled="true"' ?> />
+				<label for="interaction-interest-enabled"><?= _t('ext.interaction_analytics.enable_interest_model') ?></label>
+			</div>
+		</div>
+		<div class="form-group">
+			<label class="group-name" for="interaction-interest-auto-train"><?= _t('ext.interaction_analytics.interest_auto_train') ?></label>
+			<div class="group-controls">
+				<input type="checkbox" id="interaction-interest-auto-train" name="interest_model_auto_train" value="1"
+					<?= $this->interest_model_auto_train ? 'checked' : '' ?> <?= $this->interest_schema_ready ? '' : 'disabled aria-disabled="true"' ?> />
+				<label for="interaction-interest-auto-train"><?= _t('ext.interaction_analytics.enable_interest_auto_train') ?></label>
+			</div>
+		</div>
+		<div class="form-group">
+			<label class="group-name" for="interaction-interest-display"><?= _t('ext.interaction_analytics.interest_display') ?></label>
+			<div class="group-controls">
+				<select id="interaction-interest-display" name="interest_display_mode" <?= $this->interest_schema_ready ? '' : 'disabled aria-disabled="true"' ?>>
+					<option value="score" <?= $this->interest_display_mode === 'score' ? 'selected' : '' ?>><?= _t('ext.interaction_analytics.interest_display_score') ?></option>
+					<option value="off" <?= $this->interest_display_mode === 'off' ? 'selected' : '' ?>><?= _t('ext.interaction_analytics.interest_display_off') ?></option>
+				</select>
+			</div>
+		</div>
+		<div class="form-group">
+			<label class="group-name" for="interaction-interest-feedback"><?= _t('ext.interaction_analytics.interest_feedback') ?></label>
+			<div class="group-controls">
+				<input type="checkbox" id="interaction-interest-feedback" name="interest_explicit_feedback" value="1"
+					<?= $this->interest_explicit_feedback ? 'checked' : '' ?> <?= $this->interest_schema_ready ? '' : 'disabled aria-disabled="true"' ?> />
+				<label for="interaction-interest-feedback"><?= _t('ext.interaction_analytics.enable_interest_feedback') ?></label>
+			</div>
+		</div>
+		<?php if ($this->interest_model_enabled && !$this->tracking_enabled): ?>
+			<p class="alert alert-warn"><?= _t('ext.interaction_analytics.model_warning_tracking_disabled') ?></p>
+		<?php endif; ?>
+		<?php if ($this->interest_model_enabled && $this->tracked_feed_ids === []): ?>
+			<p class="alert alert-warn"><?= _t('ext.interaction_analytics.model_warning_no_feeds') ?></p>
+		<?php endif; ?>
+		<?php if ($this->interest_model_enabled && !$this->preserve_historical_metadata): ?>
+			<p class="alert alert-warn"><?= _t('ext.interaction_analytics.model_warning_metadata') ?></p>
+		<?php endif; ?>
+		<?php if (($modelStatus['status'] ?? null) === 'insufficient_data'): ?>
+			<p class="alert alert-warn"><?= _t('ext.interaction_analytics.model_warning_insufficient') ?></p>
+		<?php endif; ?>
+	</fieldset>
+
 	<fieldset class="interaction-analytics-feed-list">
 		<legend><?= _t('ext.interaction_analytics.tracked_feeds') ?></legend>
 		<?php if ($this->feeds === []): ?>
@@ -75,6 +146,42 @@ $greaderHelp = $this->entries_read_available
 		</div>
 	</div>
 </form>
+
+<section class="interaction-interest-management">
+	<h2><?= _t('ext.interaction_analytics.model_summary_title') ?></h2>
+	<table class="table interaction-interest-status">
+		<tbody>
+			<tr><th><?= _t('ext.interaction_analytics.model_status') ?></th><td><?= $escape($statusLabels[(string)($modelStatus['status'] ?? 'schema_unavailable')] ?? (string)($modelStatus['status'] ?? '—')) ?></td></tr>
+			<tr><th><?= _t('ext.interaction_analytics.model_version') ?></th><td><?= (int)($modelStatus['model_version'] ?? 0) ?></td></tr>
+			<tr><th><?= _t('ext.interaction_analytics.model_last_trained') ?></th><td><?= $escape($formatTimestamp($modelStatus['trained_at'] ?? null)) ?></td></tr>
+			<tr><th><?= _t('ext.interaction_analytics.model_last_attempt') ?></th><td><?= $escape($formatTimestamp($modelStatus['last_attempt_at'] ?? null)) ?></td></tr>
+			<tr><th><?= _t('ext.interaction_analytics.model_dirty_generation') ?></th><td><?= (int)($modelStatus['dirty_generation'] ?? 0) ?></td></tr>
+			<tr><th><?= _t('ext.interaction_analytics.model_pending') ?></th><td><?= (int)($modelStatus['pending_changes'] ?? 0) ?></td></tr>
+			<tr><th><?= _t('ext.interaction_analytics.model_samples') ?></th><td><?= (int)($modelStatus['positive_samples'] ?? 0) ?> / <?= (int)($modelStatus['negative_samples'] ?? 0) ?></td></tr>
+			<tr><th><?= _t('ext.interaction_analytics.model_validation') ?></th><td><?= (int)($modelStatus['validation_samples'] ?? 0) ?></td></tr>
+			<tr><th><?= _t('ext.interaction_analytics.model_precision') ?></th><td><?= $escape($formatPercent($modelMetrics['low_interest_precision'] ?? null)) ?></td></tr>
+			<tr><th><?= _t('ext.interaction_analytics.model_recall') ?></th><td><?= $escape($formatPercent($modelMetrics['low_interest_recall'] ?? null)) ?></td></tr>
+			<tr><th><?= _t('ext.interaction_analytics.model_quality_gate') ?></th><td><?= !empty($modelStatus['quality_gate_passed']) ? _t('ext.interaction_analytics.yes') : _t('ext.interaction_analytics.no') ?></td></tr>
+			<tr><th><?= _t('ext.interaction_analytics.model_threshold') ?></th><td><?= $escape($formatPercent($modelStatus['decision_threshold'] ?? null)) ?></td></tr>
+			<tr><th><?= _t('ext.interaction_analytics.model_vocabulary') ?></th><td><?= (int)($modelStatus['vocabulary_size'] ?? 0) ?></td></tr>
+			<tr><th><?= _t('ext.interaction_analytics.model_duration') ?></th><td><?= isset($modelMetrics['duration_ms']) ? (int)$modelMetrics['duration_ms'] . ' ms' : '—' ?></td></tr>
+			<tr><th><?= _t('ext.interaction_analytics.model_size') ?></th><td><?= isset($modelMetrics['artifact_bytes']) ? number_format((int)$modelMetrics['artifact_bytes']) . ' B' : '—' ?></td></tr>
+		</tbody>
+	</table>
+	<?php if (is_string($modelStatus['last_error'] ?? null) && $modelStatus['last_error'] !== ''): ?>
+		<p class="alert alert-error"><?= $escape((string)$modelStatus['last_error']) ?></p>
+	<?php endif; ?>
+	<div class="interaction-interest-actions">
+		<form action="<?= _url('interactionAnalytics', 'requestTraining') ?>" method="post">
+			<input type="hidden" name="_csrf" value="<?= FreshRSS_Auth::csrfToken() ?>" />
+			<button type="submit" class="btn" <?= $this->interest_schema_ready && $this->interest_model_enabled && $this->tracking_enabled && $this->tracked_feed_ids !== [] ? '' : 'disabled aria-disabled="true"' ?>><?= _t('ext.interaction_analytics.request_training') ?></button>
+		</form>
+		<form action="<?= _url('interactionAnalytics', 'deleteModel') ?>" method="post" onsubmit="return confirm('<?= $escape(_t('ext.interaction_analytics.confirm_delete_model')) ?>');">
+			<input type="hidden" name="_csrf" value="<?= FreshRSS_Auth::csrfToken() ?>" />
+			<button type="submit" class="btn btn-important" <?= $this->interest_schema_ready ? '' : 'disabled aria-disabled="true"' ?>><?= _t('ext.interaction_analytics.delete_model') ?></button>
+		</form>
+	</div>
+</section>
 
 <section class="interaction-analytics-management">
 	<h2><?= _t('ext.interaction_analytics.summary_title') ?></h2>
